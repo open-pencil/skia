@@ -55,7 +55,11 @@ void log_map_error(WGPUBufferMapAsyncStatus status, const char*) {
             statusStr = "<other>";
             break;
     }
-    SKGPU_LOG(priority, "Buffer async map failed with status %s.", statusStr);
+    if (priority == SkLogPriority::kDebug) {
+        SKGPU_LOG_D("Buffer async map failed with status %s.", statusStr);
+    } else {
+        SKGPU_LOG_E("Buffer async map failed with status %s.", statusStr);
+    }
 }
 
 #else
@@ -190,7 +194,7 @@ DawnBuffer::DawnBuffer(const DawnSharedContext* sharedContext,
                  // prepareForReturnToCache only needs to be called for a buffer that is mappable
                  // for writing
                  /* requiresPrepareForReturnToCache= */
-                                                   fBuffer.GetUsage() & wgpu::BufferUsage::MapWrite
+                                                   buffer.GetUsage() & wgpu::BufferUsage::MapWrite)
 #else
                  /* requiresPrepareForReturnToCache= */ false)
 #endif
