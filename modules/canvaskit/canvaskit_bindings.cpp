@@ -394,6 +394,7 @@ GraphiteDeviceContext* MakeGraphiteContext() {
     // On Emscripten, fInstance is not required and fTick is null (browser handles GPU ticking).
 
     skgpu::graphite::ContextOptions options;
+    options.fRequireOrderedRecordings = true;
     gGraphiteContext = skgpu::graphite::ContextFactory::MakeDawn(backendContext, options);
     if (!gGraphiteContext) {
         return nullptr;
@@ -433,12 +434,42 @@ sk_sp<SkSurface> MakeGPUTextureSurface(GraphiteDeviceContext* /*devCtx*/,
                                           nullptr);
 }
 
-// Graphite doesn't support replaceBackendTexture. Instead, we create a new surface
-// wrapping the new swapchain texture. Returns null on failure.
-sk_sp<SkSurface> ReplaceBackendTexture(
-        uint32_t textureHandle, uint32_t textureFormat, int width, int height,
-        sk_sp<SkColorSpace> colorSpace) {
-    return MakeGPUTextureSurface(nullptr, textureHandle, textureFormat, width, height, colorSpace);
+// Cached frame surface for BeginFrame/EndFrame pattern.
+// Avoids creating a new SkSurface every frame when dimensions haven't changed.
+static sk_sp<SkSurface> gFrameSurface;
+static int gFrameWidth = 0;
+static int gFrameHeight = 0;
+
+SkCanvas* BeginFrame(uint32_t textureHandle, uint32_t textureFormat,
+                     int width, int height, sk_sp<SkColorSpace> colorSpace) {
+    if (!gGraphiteRecorder) return nullptr;
+    if (!colorSpace) colorSpace = SkColorSpace::MakeSRGB();
+
+    wgpu::Texture texture(emscripten_webgpu_import_texture(textureHandle));
+    emscripten_webgpu_release_js_handle(textureHandle);
+
+    auto backendTex = skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+    gFrameSurface = SkSurfaces::WrapBackendTexture(
+        gGraphiteRecorder.get(), backendTex, colorSpace, nullptr);
+    if (!gFrameSurface) return nullptr;
+
+    gFrameWidth = width;
+    gFrameHeight = height;
+    return gFrameSurface->getCanvas();
+}
+
+void EndFrame() {
+    if (!gFrameSurface || !gGraphiteRecorder || !gGraphiteContext) return;
+
+    auto recording = gGraphiteRecorder->snap();
+    if (recording) {
+        skgpu::graphite::InsertRecordingInfo info;
+        info.fRecording = recording.get();
+        gGraphiteContext->insertRecording(info);
+        gGraphiteContext->submit(skgpu::graphite::SyncToCpu::kNo);
+    }
+    // Keep gFrameSurface alive — browser needs it for presentation.
+    // It will be replaced on next BeginFrame.
 }
 
 #endif  // CK_ENABLE_WEBGPU
@@ -1164,6 +1195,8 @@ EMSCRIPTEN_BINDINGS(Skia) {
         return MakeGraphiteContext();
     }), allow_raw_pointers());
     function("_MakeGPUTextureSurface", &MakeGPUTextureSurface, allow_raw_pointers());
+    function("_BeginFrame", &BeginFrame, allow_raw_pointers());
+    function("_EndFrame", &EndFrame);
 #endif  // CK_ENABLE_WEBGPU
 
     function("getDecodeCacheLimitBytes", &SkResourceCache::GetTotalByteLimit);

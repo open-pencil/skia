@@ -127,6 +127,23 @@
         });
       };
 
+      // Optimized frame API: single JS→WASM call for begin/end frame.
+      // Avoids per-frame SkSurface JS object creation overhead.
+      CanvasKit.BeginFrame = function(canvasCtx) {
+        var context = canvasCtx._inner;
+        var texture = context.getCurrentTexture();
+        var handle = CanvasKit.JsValStore.add(texture);
+        var formatIdx = CanvasKit.WebGPU.TextureFormat.indexOf(canvasCtx._textureFormat);
+        var canvas = CanvasKit._BeginFrame(handle, formatIdx,
+                                           context.canvas.width, context.canvas.height,
+                                           null);
+        return canvas;
+      };
+
+      CanvasKit.EndFrame = function() {
+        CanvasKit._EndFrame();
+      };
+
       // Compat: older CanvasKit combined Path+PathBuilder into one class. Newer Skia
       // splits them: Path is read-only, PathBuilder has mutators. We wrap PathBuilder
       // to auto-snapshot into a real Path when passed to draw/clip calls.
