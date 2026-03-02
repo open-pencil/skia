@@ -89,34 +89,23 @@
               colorSpace);
       };
 
-      CanvasKit.Surface.prototype.assignCurrentSwapChainTexture = function() {
-        // This feature is only supported for a Surface that was created via MakeGPUCanvasSurface.
-        if (!this._canvasContext) {
-          console.log('Surface is not bound to a canvas context');
-          return false;
-        }
-        let ctx = this._canvasContext._inner;
-        return this._replaceBackendTexture(
-            CanvasKit.JsValStore.add(ctx.getCurrentTexture()),
-            CanvasKit.WebGPU.TextureFormat.indexOf(this._canvasContext._textureFormat),
-            ctx.canvas.width, ctx.canvas.height);
-      };
-
       CanvasKit.Surface.prototype.requestAnimationFrame = function(callback, dirtyRect) {
         if (!this.reportBackendTypeIsGPU()) {
           return this._requestAnimationFrameInternal(callback, dirtyRect);
         }
 
+        // For Graphite, create a fresh surface wrapping the current swapchain texture each frame.
+        var canvasCtx = this._canvasContext;
         return requestAnimationFrame(function() {
-          // Replace the render target of the Surface with the current swapchain surface if this is
-          // bound to a canvas context.
-          if (this._canvasContext && !this.assignCurrentSwapChainTexture()) {
-            console.log('failed to replace GPU backend texture');
+          var surface = CanvasKit.MakeGPUCanvasSurface(canvasCtx);
+          if (!surface) {
+            console.error('Failed to create surface for current swapchain texture');
             return;
           }
-          callback(this.getCanvas());
-          this.flush(dirtyRect);
-        }.bind(this));
+          callback(surface.getCanvas());
+          surface.flush(dirtyRect);
+          surface.dispose();
+        });
       };
 
       CanvasKit.Surface.prototype.drawOnce = function(callback, dirtyRect) {
@@ -125,17 +114,68 @@
           return;
         }
 
+        var canvasCtx = this._canvasContext;
         requestAnimationFrame(function() {
-          // Replace the render target of the Surface with the current swapchain surface if this is
-          // bound to a canvas context.
-          if (this._canvasContext && !this.assignCurrentSwapChainTexture()) {
-            console.log('failed to replace GPU backend texture');
+          var surface = CanvasKit.MakeGPUCanvasSurface(canvasCtx);
+          if (!surface) {
+            console.error('Failed to create surface for current swapchain texture');
             return;
           }
-          callback(this.getCanvas());
-          this.flush(dirtyRect);
-          this.dispose();
-        }.bind(this));
+          callback(surface.getCanvas());
+          surface.flush(dirtyRect);
+          surface.dispose();
+        });
+      };
+
+      // Compat: older CanvasKit combined Path+PathBuilder into one class. Newer Skia
+      // splits them: Path is read-only, PathBuilder has mutators. We wrap PathBuilder
+      // to auto-snapshot into a real Path when passed to draw/clip calls.
+      var RealPath = CanvasKit['Path'];
+      var PB = CanvasKit['PathBuilder'];
+      CanvasKit['Path'] = function() {
+        var pb = new PB();
+        // _toPath() snapshots the builder into a real SkPath for embind
+        pb._toPath = function() {
+          return pb.snapshot();
+        };
+        // Override delete to also clean up any cached snapshot
+        var origDelete = pb.delete.bind(pb);
+        pb.delete = function() {
+          origDelete();
+        };
+        return pb;
+      };
+      // Copy static methods from the real Path class
+      Object.keys(RealPath).forEach(function(k) {
+        CanvasKit['Path'][k] = RealPath[k];
+      });
+
+      // Patch Canvas methods that accept Path to auto-snapshot PathBuilder
+      function unwrapPath(p) {
+        return (p && p._toPath) ? p._toPath() : p;
+      }
+      var CanvasProto = CanvasKit['Canvas'].prototype;
+      var origDrawPath = CanvasProto['drawPath'];
+      CanvasProto['drawPath'] = function(path, paint) {
+        var rp = unwrapPath(path);
+        origDrawPath.call(this, rp, paint);
+        if (rp !== path) rp.delete();
+      };
+      var origClipPath = CanvasProto['clipPath'];
+      CanvasProto['clipPath'] = function(path, op, doAntiAlias) {
+        var rp = unwrapPath(path);
+        origClipPath.call(this, rp, op, doAntiAlias);
+        if (rp !== path) rp.delete();
+      };
+      // Patch PathBuilder._addPath to auto-snapshot the source path argument
+      var origAddPath = PB.prototype['_addPath'];
+      PB.prototype['_addPath'] = function() {
+        var args = Array.prototype.slice.call(arguments);
+        args[0] = unwrapPath(args[0]);
+        var needsDelete = args[0] !== arguments[0];
+        var result = origAddPath.apply(this, args);
+        if (needsDelete) args[0].delete();
+        return result;
       };
     });
 }(Module));  // When this file is loaded in, the high level object is "Module".
