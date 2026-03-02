@@ -77,14 +77,14 @@
 #define ENABLE_GPU
 #endif
 
-#ifdef ENABLE_GPU
+#ifdef CK_ENABLE_WEBGL
 #include "include/gpu/GpuTypes.h"
 #include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/GrExternalTextureGenerator.h"
 #include "include/gpu/ganesh/SkImageGanesh.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "src/gpu/ganesh/GrCaps.h"
-#endif  // ENABLE_GPU
+#endif  // CK_ENABLE_WEBGL
 
 #ifdef CK_ENABLE_WEBGL
 #include "include/gpu/ganesh/GrBackendSurface.h"
@@ -106,6 +106,15 @@
 #include <emscripten/html5_webgpu.h>
 #include <webgpu/webgpu.h>
 #include <webgpu/webgpu_cpp.h>
+#include "include/gpu/graphite/BackendTexture.h"
+#include "include/gpu/graphite/Context.h"
+#include "include/gpu/graphite/ContextOptions.h"
+#include "include/gpu/graphite/GraphiteTypes.h"
+#include "include/gpu/graphite/Recorder.h"
+#include "include/gpu/graphite/Recording.h"
+#include "include/gpu/graphite/Surface.h"
+#include "include/gpu/graphite/dawn/DawnBackendContext.h"
+#include "include/gpu/graphite/dawn/DawnGraphiteTypes.h"
 #endif  // CK_ENABLE_WEBGPU
 
 #ifndef CK_NO_FONTS
@@ -367,71 +376,69 @@ sk_sp<SkSurface> MakeRenderTarget(sk_sp<GrDirectContext> dContext, SimpleImageIn
 
 #ifdef CK_ENABLE_WEBGPU
 
-sk_sp<GrDirectContext> MakeGrContext() {
-    GrContextOptions options;
+// Graphite context and recorder are owned here and shared across all surfaces.
+static std::unique_ptr<skgpu::graphite::Context> gGraphiteContext;
+static std::unique_ptr<skgpu::graphite::Recorder> gGraphiteRecorder;
+
+struct GraphiteDeviceContext {
+    wgpu::Device device;
+};
+
+// Called from JS MakeGPUDeviceContext. Creates the Graphite Context + Recorder.
+GraphiteDeviceContext* MakeGraphiteContext() {
     wgpu::Device device = wgpu::Device::Acquire(emscripten_webgpu_get_device());
-    return GrDirectContext::MakeDawn(device, options);
+
+    skgpu::graphite::DawnBackendContext backendContext;
+    backendContext.fDevice = device;
+    backendContext.fQueue = device.GetQueue();
+    // On Emscripten, fInstance is not required and fTick is null (browser handles GPU ticking).
+
+    skgpu::graphite::ContextOptions options;
+    gGraphiteContext = skgpu::graphite::ContextFactory::MakeDawn(backendContext, options);
+    if (!gGraphiteContext) {
+        return nullptr;
+    }
+
+    gGraphiteRecorder = gGraphiteContext->makeRecorder();
+    if (!gGraphiteRecorder) {
+        gGraphiteContext.reset();
+        return nullptr;
+    }
+
+    auto* ctx = new GraphiteDeviceContext();
+    ctx->device = device;
+    return ctx;
 }
 
-sk_sp<SkSurface> MakeGPUTextureSurface(sk_sp<GrDirectContext> dContext,
+sk_sp<SkSurface> MakeGPUTextureSurface(GraphiteDeviceContext* /*devCtx*/,
                                        uint32_t textureHandle,
                                        uint32_t textureFormat,
                                        int width,
                                        int height,
                                        sk_sp<SkColorSpace> colorSpace) {
+    if (!gGraphiteRecorder) {
+        return nullptr;
+    }
     if (!colorSpace) {
         colorSpace = SkColorSpace::MakeSRGB();
     }
 
-    wgpu::TextureFormat format = static_cast<wgpu::TextureFormat>(textureFormat);
     wgpu::Texture texture(emscripten_webgpu_import_texture(textureHandle));
     emscripten_webgpu_release_js_handle(textureHandle);
 
-    // GrDawnRenderTargetInfo currently only supports a 1-mip TextureView.
-    constexpr uint32_t mipLevelCount = 1;
-    constexpr uint32_t sampleCount = 1;
-
-    GrDawnTextureInfo info;
-    info.fTexture = texture;
-    info.fFormat = format;
-    info.fLevelCount = mipLevelCount;
-
-    GrBackendTexture target(width, height, info);
-    return SkSurfaces::WrapBackendTexture(
-            dContext.get(),
-            target,
-            kTopLeft_GrSurfaceOrigin,
-            sampleCount,
-            colorSpace->isSRGB() ? kRGBA_8888_SkColorType : kRGBA_F16_SkColorType,
-            colorSpace,
-            nullptr);
+    auto backendTex = skgpu::graphite::BackendTextures::MakeDawn(texture.Get());
+    return SkSurfaces::WrapBackendTexture(gGraphiteRecorder.get(),
+                                          backendTex,
+                                          colorSpace,
+                                          nullptr);
 }
 
-bool ReplaceBackendTexture(
-        SkSurface& surface, uint32_t textureHandle, uint32_t textureFormat, int width, int height) {
-    wgpu::TextureFormat format = static_cast<wgpu::TextureFormat>(textureFormat);
-    wgpu::Texture texture(emscripten_webgpu_import_texture(textureHandle));
-    emscripten_webgpu_release_js_handle(textureHandle);
-
-    GrDawnTextureInfo info;
-    info.fTexture = texture;
-    info.fFormat = format;
-    info.fLevelCount = 1;
-
-    // Use kDiscard_ContentChangeMode to discard the contents of the old backing texture. This not
-    // only avoids an unnecessary blit, we also don't support copying the contents of a swapchain
-    // texture due to the default GPUCanvasConfiguration usage bits we used when configuring the
-    // GPUCanvasContext in JS.
-    //
-    // The default usage bits only contain GPUTextureUsage.RENDER_ATTACHMENT. To support a copy we
-    // would need to also set GPUTextureUsage.TEXTURE_BINDING (to sample it in a shader) or
-    // GPUTextureUsage.COPY_SRC (for a copy command).
-    //
-    // See https://www.w3.org/TR/webgpu/#namespacedef-gputextureusage and
-    // https://www.w3.org/TR/webgpu/#dictdef-gpucanvasconfiguration.
-    GrBackendTexture target(width, height, info);
-    return surface.replaceBackendTexture(
-            target, kTopLeft_GrSurfaceOrigin, SkSurface::kDiscard_ContentChangeMode);
+// Graphite doesn't support replaceBackendTexture. Instead, we create a new surface
+// wrapping the new swapchain texture. Returns null on failure.
+sk_sp<SkSurface> ReplaceBackendTexture(
+        uint32_t textureHandle, uint32_t textureFormat, int width, int height,
+        sk_sp<SkColorSpace> colorSpace) {
+    return MakeGPUTextureSurface(nullptr, textureHandle, textureFormat, width, height, colorSpace);
 }
 
 #endif  // CK_ENABLE_WEBGPU
@@ -1116,10 +1123,10 @@ private:
 };
 
 EMSCRIPTEN_BINDINGS(Skia) {
-#ifdef ENABLE_GPU
+#if defined(CK_ENABLE_WEBGL) && !defined(CK_ENABLE_WEBGPU)
     constant("gpu", true);
     function("_MakeGrContext", &MakeGrContext);
-#endif  // ENABLE_GPU
+#endif  // CK_ENABLE_WEBGL && !CK_ENABLE_WEBGPU
 
 #ifdef CK_ENABLE_WEBGL
     constant("webgl", true);
@@ -1140,8 +1147,23 @@ EMSCRIPTEN_BINDINGS(Skia) {
 #endif  // CK_ENABLE_WEBGL
 
 #ifdef CK_ENABLE_WEBGPU
+    constant("gpu", true);
     constant("webgpu", true);
-    function("_MakeGPUTextureSurface", &MakeGPUTextureSurface);
+
+    class_<GraphiteDeviceContext>("GrDirectContext")
+            .function("_getResourceCacheLimitBytes",
+                      optional_override([](GraphiteDeviceContext& self) -> size_t { return 0; }))
+            .function("_getResourceCacheUsageBytes",
+                      optional_override([](GraphiteDeviceContext& self) -> size_t { return 0; }))
+            .function("_releaseResourcesAndAbandonContext",
+                      optional_override([](GraphiteDeviceContext& self) -> void { }))
+            .function("_setResourceCacheLimitBytes",
+                      optional_override([](GraphiteDeviceContext& self, size_t) -> void { }));
+
+    function("_MakeGrContext", optional_override([]() -> GraphiteDeviceContext* {
+        return MakeGraphiteContext();
+    }), allow_raw_pointers());
+    function("_MakeGPUTextureSurface", &MakeGPUTextureSurface, allow_raw_pointers());
 #endif  // CK_ENABLE_WEBGPU
 
     function("getDecodeCacheLimitBytes", &SkResourceCache::GetTotalByteLimit);
@@ -1248,7 +1270,7 @@ EMSCRIPTEN_BINDINGS(Skia) {
              allow_raw_pointers());
 #endif
 
-#ifdef ENABLE_GPU
+#ifdef CK_ENABLE_WEBGL
     class_<GrDirectContext>("GrDirectContext")
             .smart_ptr<sk_sp<GrDirectContext>>("sk_sp<GrDirectContext>")
             .function("_getResourceCacheLimitBytes",
@@ -1274,7 +1296,7 @@ EMSCRIPTEN_BINDINGS(Skia) {
                           self.getResourceCacheLimits(&maxResources, &currMax);
                           self.setResourceCacheLimits(maxResources, maxResourceBytes);
                       }));
-#endif  // ENABLE_GPU
+#endif  // CK_ENABLE_WEBGL
 #ifdef CK_ENABLE_WEBGL
     // This allows us to give the C++ code a JS callback to delete textures that
     // have been passed in via makeImageFromTexture and makeImageFromTextureSource.
@@ -1982,7 +2004,7 @@ EMSCRIPTEN_BINDINGS(Skia) {
                                            int quality) -> Uint8Array {
                           return encodeImage(nullptr, self, fmt, quality);
                       }))
-#if defined(ENABLE_GPU)
+#ifdef CK_ENABLE_WEBGL
             .function("_encodeToBytes",
                       optional_override([](sk_sp<SkImage> self,
                                            SkEncodedImageFormat fmt,
@@ -2020,7 +2042,7 @@ EMSCRIPTEN_BINDINGS(Skia) {
                                   tx, ty, {filter, mipmap}, mPtr ? &localMatrix : nullptr);
                       }),
                       allow_raw_pointers())
-#if defined(ENABLE_GPU)
+#ifdef CK_ENABLE_WEBGL
             .function("_readPixels",
                       optional_override([](sk_sp<SkImage> self,
                                            SimpleImageInfo sii,
@@ -2844,6 +2866,17 @@ EMSCRIPTEN_BINDINGS(Skia) {
 #ifdef CK_ENABLE_WEBGL
                           skgpu::ganesh::FlushAndSubmit(&self);
 #endif
+#ifdef CK_ENABLE_WEBGPU
+                          if (gGraphiteRecorder && gGraphiteContext) {
+                              auto recording = gGraphiteRecorder->snap();
+                              if (recording) {
+                                  skgpu::graphite::InsertRecordingInfo info;
+                                  info.fRecording = recording.get();
+                                  gGraphiteContext->insertRecording(info);
+                                  gGraphiteContext->submit(skgpu::graphite::SyncToCpu::kNo);
+                              }
+                          }
+#endif
                       }))
             .function("_getCanvas", &SkSurface::getCanvas, allow_raw_pointers())
             .function("imageInfo", optional_override([](SkSurface& self) -> SimpleImageInfo {
@@ -2881,16 +2914,7 @@ EMSCRIPTEN_BINDINGS(Skia) {
                                   releaseCtx);
                       }))
 #endif  // CK_ENABLE_WEBGL
-#ifdef CK_ENABLE_WEBGPU
-            .function("_replaceBackendTexture",
-                      optional_override([](SkSurface& self,
-                                           uint32_t texHandle,
-                                           uint32_t texFormat,
-                                           int width,
-                                           int height) {
-                          return ReplaceBackendTexture(self, texHandle, texFormat, width, height);
-                      }))
-#endif  // CK_ENABLE_WEBGPU
+            // _replaceBackendTexture removed for Graphite: we create a new surface each frame
             .function("_makeImageSnapshot",
                       optional_override([](SkSurface& self, WASMPointerU32 iPtr) -> sk_sp<SkImage> {
                           SkIRect* bounds = reinterpret_cast<SkIRect*>(iPtr);
@@ -2906,6 +2930,14 @@ EMSCRIPTEN_BINDINGS(Skia) {
                     }),
                     allow_raw_pointers())
 #ifdef ENABLE_GPU
+#ifdef CK_ENABLE_WEBGPU
+            .function("reportBackendTypeIsGPU",
+                      optional_override([](SkSurface& self) -> bool { return true; }))
+            .function("sampleCnt",
+                      optional_override([](SkSurface& self) -> int { return 1; }))
+            .function("_resetContext",
+                      optional_override([](SkSurface& self) -> void { }))
+#else
             .function("reportBackendTypeIsGPU", optional_override([](SkSurface& self) -> bool {
                           return self.getCanvas()->recordingContext() != nullptr;
                       }))
@@ -2918,6 +2950,7 @@ EMSCRIPTEN_BINDINGS(Skia) {
                           GrAsDirectContext(self.recordingContext())
                                   ->resetContext(kTextureBinding_GrGLBackendState);
                       }))
+#endif
 #else
             .function("reportBackendTypeIsGPU",
                       optional_override([](SkSurface& self) -> bool { return false; }))
