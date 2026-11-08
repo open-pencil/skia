@@ -346,6 +346,8 @@ skia_wasm_lib("canvaskit") {
     "-sFORCE_FILESYSTEM=0",
     "-sFILESYSTEM=0",
     "-sMODULARIZE",
+    # OpenPencil: an ES module whose default export is CanvasKitInit, as its types declare.
+    "-sEXPORT_ES6",
     "-sNO_EXIT_RUNTIME=1",
     "-sINITIAL_MEMORY=128MB",
     "-sWASM",
