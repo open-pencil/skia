@@ -272,6 +272,7 @@ var CanvasKit = {
     _MakeForBlender: function() {},
     _makeShader: function() {},
     _makeShaderWithChildren: function() {},
+    _makeImageFilter: function() {},
     _makeBlender: function() {},
   },
 
@@ -528,6 +529,7 @@ var CanvasKit = {
     MakeImage: function() {},
     MakeMatrixTransform: function() {},
     MakeOffset: function() {},
+    MakeRuntimeShader: function() {},
 
     prototype: {
       getOutputBounds: function() {},

@@ -2798,6 +2798,31 @@ EMSCRIPTEN_BINDINGS(Skia) {
                           delete[] children;
                           return s;
                       }))
+            // OpenPencil: SkImageFilters::RuntimeShader, a filter whose output is the effect,
+            // with `childShaderName` sampling the filter's input (the layer, or its backdrop).
+            .function("_makeImageFilter",
+                      optional_override([](SkRuntimeEffect& self,
+                                           WASMPointerF32 fPtr,
+                                           size_t fLen,
+                                           bool shouldOwnUniforms,
+                                           std::string childShaderName,
+                                           SkScalar sampleRadius,
+                                           WASMPointerU32 inputPtr) -> sk_sp<SkImageFilter> {
+                          void* uniformData = reinterpret_cast<void*>(fPtr);
+                          castUniforms(uniformData, fLen, self);
+                          sk_sp<SkData> uniforms;
+                          if (shouldOwnUniforms) {
+                              uniforms = SkData::MakeFromMalloc(uniformData, fLen);
+                          } else {
+                              uniforms = SkData::MakeWithoutCopy(uniformData, fLen);
+                          }
+                          // A bare pointer from an sk_sp owned in JS, or 0 for the source.
+                          sk_sp<SkImageFilter> input =
+                                  sk_ref_sp(reinterpret_cast<SkImageFilter*>(inputPtr));
+                          SkRuntimeEffectBuilder builder(sk_ref_sp(&self), std::move(uniforms));
+                          return SkImageFilters::RuntimeShader(
+                                  builder, sampleRadius, childShaderName, std::move(input));
+                      }))
             .function("_makeBlender",
                       optional_override([](SkRuntimeEffect& self,
                                            WASMPointerF32 fPtr,

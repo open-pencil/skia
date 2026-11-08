@@ -3762,6 +3762,21 @@ export interface FontMgrFactory {
  */
 export interface ImageFilterFactory {
     /**
+     * OpenPencil: an image filter whose output is the runtime effect evaluated at each pixel. The
+     * effect's uniform shader named childShaderName samples the input filter's result (with no
+     * input, the content being filtered; as a backdrop filter in saveLayer, the backdrop).
+     * @param effect - a shader effect from RuntimeEffect.Make.
+     * @param uniforms - the effect's uniforms, as for RuntimeEffect.makeShader.
+     * @param childShaderName - the effect's uniform shader that samples the input.
+     * @param sampleRadius - how far from its own coordinate the effect samples the child, in
+     *                       local units; 0 when it samples only its own coordinate.
+     * @param input - if null, the filtered content (or backdrop) is used.
+     */
+    MakeRuntimeShader(effect: RuntimeEffect, uniforms: Float32Array | number[] | MallocObj,
+                      childShaderName: string, sampleRadius: number,
+                      input: ImageFilter | null): ImageFilter;
+
+    /**
      * Create a filter that takes a BlendMode and uses it to composite the two filters together.
      *
      *  At least one of background and foreground should be non-null in nearly all circumstances.

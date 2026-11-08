@@ -40,6 +40,17 @@ CanvasKit._extraInitializations.push(function() {
     return this._makeShader(fptr, floats.length * 4, shouldOwnUniforms, localMatrixPtr);
   }
 
+  // OpenPencil: an image filter whose output is this effect, with the uniform shader named
+  // childShaderName sampling the input filter (null for the layer's own content, or its backdrop
+  // in saveLayer). sampleRadius is how far from its own coordinate the effect samples the child.
+  CanvasKit.ImageFilter.MakeRuntimeShader = function(effect, floats, childShaderName, sampleRadius, input) {
+    var shouldOwnUniforms = !floats['_ck'];
+    var fptr = copy1dArray(floats, 'HEAPF32');
+    var inputPtr = input ? input.$$.ptr : 0;
+    return effect._makeImageFilter(fptr, floats.length * 4, shouldOwnUniforms,
+                                   childShaderName, sampleRadius || 0, inputPtr);
+  }
+
   // childrenWithShaders is an array of other shaders (e.g. Image.makeShader())
   CanvasKit.RuntimeEffect.prototype.makeShaderWithChildren = function(floats, childrenShaders, localMatrix) {
     // If the uniforms were set in a MallocObj, we don't want the shader to take ownership of
