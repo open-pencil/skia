@@ -330,7 +330,11 @@ THashMap<SkGlyphID, SkString>& SkPDFFont::GetUnicodeMapEx(const SkTypeface& type
 
 SkAdvancedTypefaceMetrics::FontType SkPDFFont::FontType(const SkPDFStrike& pdfStrike,
                                                         const SkAdvancedTypefaceMetrics& metrics) {
-    if (SkToBool(metrics.fFlags & SkAdvancedTypefaceMetrics::kVariable_FontFlag) ||
+    // OpenPencil: a variable TrueType font embeds as the instance it draws, which the HarfBuzz
+    // subsetter cuts; without that subsetter it is drawn as Type3 outlines.
+    if ((SkToBool(metrics.fFlags & SkAdvancedTypefaceMetrics::kVariable_FontFlag) &&
+         (metrics.fType != SkAdvancedTypefaceMetrics::kTrueType_Font ||
+          !SkPDFCanSubsetTableBasedFonts())) ||
         // PDF is actually interested in the encoding of the data, not just the logical format.
         // If the TrueType is actually wOFF or wOF2 then it should not be directly embedded in PDF.
         // Export these as Type3 if the subsetter cannot handle table based fonts.

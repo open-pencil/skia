@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <memory>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -172,6 +173,23 @@ sk_sp<SkData> subset_harfbuzz(const SkTypeface& typeface, const SkPDFGlyphUse& g
     }
     hb_set_t* glyphs = hb_subset_input_glyph_set(input.get());
     glyphUsage.getSetValues([&glyphs](unsigned gid) { hb_set_add(glyphs, gid);});
+
+    // OpenPencil: cut a variable font to the instance the typeface draws, so it embeds as a
+    // static TrueType font rather than as Type3 outlines.
+    int axisCount = typeface.getVariationDesignPosition({});
+    if (axisCount > 0) {
+        std::vector<SkFontArguments::VariationPosition::Coordinate> position(axisCount);
+        if (typeface.getVariationDesignPosition(position) != axisCount ||
+            !hb_subset_input_pin_all_axes_to_default(input.get(), face.get())) {
+            return nullptr;
+        }
+        for (const auto& coordinate : position) {
+            if (!hb_subset_input_pin_axis_location(input.get(), face.get(),
+                                                   (hb_tag_t)coordinate.axis, coordinate.value)) {
+                return nullptr;
+            }
+        }
+    }
 
     HBFace subset = make_subset(input.get(), face.get(), glyphUsage.has(0));
     if (!subset) {
