@@ -123,6 +123,7 @@ skia_wasm_lib("canvaskit") {
   sources = [
     "WasmCommon.h",
     "canvaskit_bindings.cpp",
+    "pdf_bindings.cpp",
   ]
   if (skia_canvaskit_enable_paragraph) {
     sources += [

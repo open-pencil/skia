@@ -468,6 +468,7 @@ export interface CanvasKit {
     readonly Path: PathConstructorAndFactory;
     readonly PathBuilder: PathBuilderConstructor;
     readonly PictureRecorder: DefaultConstructor<PictureRecorder>;
+    readonly PDFDocument: PDFDocumentConstructor;
     readonly TextStyle: TextStyleConstructor;
     readonly SlottableTextProperty: SlottableTextPropertyConstructor;
 
@@ -2932,6 +2933,38 @@ export interface SkPicture extends EmbindObject<"SkPicture"> {
      * no promises are made for backwards or forward compatibility.
      */
     serialize(): Uint8Array | null;
+}
+
+/**
+ * A PDF written with Skia's PDF backend: each page is an ordinary Canvas, so anything drawn to a
+ * surface's canvas can be drawn to a page. Text keeps its fonts (subset and embedded) and its
+ * characters; effects PDF cannot express are drawn as images at the document's raster DPI.
+ */
+export interface PDFDocument extends EmbindObject<"PDFDocument"> {
+    /**
+     * Starts a page of the given size in points and returns its canvas, valid until endPage().
+     * @param width
+     * @param height
+     */
+    beginPage(width: number, height: number): Canvas;
+
+    /** Ends the current page. */
+    endPage(): void;
+
+    /** Finishes the document and returns its bytes; the document cannot be drawn to after. */
+    close(): Uint8Array;
+
+    /** Discards the document. */
+    abort(): void;
+}
+
+export interface PDFDocumentConstructor {
+    /**
+     * @param title - the document's title metadata.
+     * @param creator - the application that made the content.
+     * @param rasterDPI - the resolution of effects drawn as images; 0 for Skia's default (72).
+     */
+    new (title: string, creator: string, rasterDPI: number): PDFDocument;
 }
 
 export interface PictureRecorder extends EmbindObject<"PictureRecorder"> {
