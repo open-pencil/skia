@@ -9,5 +9,6 @@ The `openpencil/canvaskit` branch is the CanvasKit release OpenPencil ships, fro
 - `[pdf] Embed variable TrueType fonts as the instance they draw`: variable fonts embed as TrueType instead of Type3.
 - `[canvaskit] Add ImageFilter.MakeRuntimeShader`: a runtime shader as an image filter, sampling its input or the backdrop.
 - `[canvaskit] Build CanvasKit as an ES module`: `canvaskit.js` default-exports `CanvasKitInit`, as its types declare, and finds `canvaskit.wasm` beside itself.
+- `[imagefilters] Evaluate runtime image filters at device resolution`: a runtime shader filter runs once per device pixel under a scaled or rotated canvas, in its own parameter coordinates, instead of at parameter resolution stretched to fit.
 
 Every push to the branch builds CanvasKit (`tools/openpencil/build-canvaskit.sh`, run by `.github/workflows/canvaskit.yml`) and releases it as `canvaskit-<commit>`: `canvaskit.js`, `canvaskit.wasm`, `index.d.ts` and their `SHA256SUMS`. OpenPencil's `packages/canvaskit` pins one of these releases and publishes it as `@open-pencil/canvaskit`. Patches that are useful beyond OpenPencil should also be offered upstream.

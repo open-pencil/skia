@@ -65,10 +65,11 @@ private:
     SK_FLATTENABLE_HOOKS(SkRuntimeImageFilter)
 
     bool onAffectsTransparentBlack() const override { return true; }
-    // Currently there is no way for a client to specify the semantics of geometric uniforms that
-    // should respond to the canvas matrix. Forcing translate-only is a hammer that lets the output
-    // be correct at the expense of resolution when there's a lot of scaling. See skbug.com/40044507.
-    MatrixCapability onGetCTMCapability() const override { return MatrixCapability::kTranslate; }
+    // OpenPencil: the shader runs once per layer pixel under any canvas matrix. onFilterImage
+    // evaluates it in parameter space, mapping its coordinates and its children's through the
+    // layer matrix, so geometric uniforms keep their meaning while the output keeps the device
+    // resolution. Upstream forces translate-only and resamples instead; see skbug.com/40044507.
+    MatrixCapability onGetCTMCapability() const override { return MatrixCapability::kComplex; }
 
     skif::FilterResult onFilterImage(const skif::Context&) const override;
 
