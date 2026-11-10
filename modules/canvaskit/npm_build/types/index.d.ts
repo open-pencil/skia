@@ -3118,10 +3118,11 @@ export interface Surface extends EmbindObject<"Surface"> {
 
     /**
      * Returns a compatible Surface, haring the same raster or GPU properties of the original.
-     * The pixels are not shared.
+     * The pixels are not shared. OpenPencil: null when one cannot be made, such as a half-float
+     * surface on a GPU context without float color buffers.
      * @param info - width, height, etc of the Surface.
      */
-    makeSurface(info: ImageInfo): Surface;
+    makeSurface(info: ImageInfo): Surface | null;
 
     /**
      * Returns if this Surface is a GPU-backed surface or not.
