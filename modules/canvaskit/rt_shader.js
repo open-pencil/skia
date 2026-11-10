@@ -51,6 +51,31 @@ CanvasKit._extraInitializations.push(function() {
                                    childShaderName, sampleRadius || 0, inputPtr);
   }
 
+  // OpenPencil: as MakeRuntimeShader, with several inputs. inputs maps each uniform shader of the
+  // effect to the filter it samples (null for the layer's own content, or its backdrop); shaders
+  // maps others to shaders they are bound to as they are.
+  CanvasKit.ImageFilter.MakeRuntimeShaderWithInputs = function(effect, floats, inputs, sampleRadius, shaders) {
+    var shouldOwnUniforms = !floats['_ck'];
+    var fptr = copy1dArray(floats, 'HEAPF32');
+    var names = Object.keys(inputs);
+    var ptrs = names.map(function(name) {
+      return inputs[name] ? inputs[name].$$.ptr : 0;
+    });
+    var ptrsPtr = copy1dArray(ptrs, 'HEAPU32');
+    shaders = shaders || {};
+    var shaderNames = Object.keys(shaders);
+    var shaderPtrs = shaderNames.map(function(name) {
+      return shaders[name].$$.ptr;
+    });
+    var shaderPtrsPtr = copy1dArray(shaderPtrs, 'HEAPU32');
+    var filter = effect._makeImageFilterWithInputs(fptr, floats.length * 4, shouldOwnUniforms,
+                                                   names, sampleRadius || 0, ptrsPtr,
+                                                   shaderNames, shaderPtrsPtr);
+    freeArraysThatAreNotMallocedByUsers(ptrsPtr, ptrs);
+    freeArraysThatAreNotMallocedByUsers(shaderPtrsPtr, shaderPtrs);
+    return filter;
+  }
+
   // childrenWithShaders is an array of other shaders (e.g. Image.makeShader())
   CanvasKit.RuntimeEffect.prototype.makeShaderWithChildren = function(floats, childrenShaders, localMatrix) {
     // If the uniforms were set in a MallocObj, we don't want the shader to take ownership of

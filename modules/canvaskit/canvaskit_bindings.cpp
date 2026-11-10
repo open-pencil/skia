@@ -2823,6 +2823,54 @@ EMSCRIPTEN_BINDINGS(Skia) {
                           return SkImageFilters::RuntimeShader(
                                   builder, sampleRadius, childShaderName, std::move(input));
                       }))
+            .function("_makeImageFilterWithInputs",
+                      optional_override([](SkRuntimeEffect& self,
+                                           WASMPointerF32 fPtr,
+                                           size_t fLen,
+                                           bool shouldOwnUniforms,
+                                           emscripten::val jsChildShaderNames,
+                                           SkScalar sampleRadius,
+                                           WASMPointerU32 inputPtrs,
+                                           emscripten::val jsShaderNames,
+                                           WASMPointerU32 shaderPtrs) -> sk_sp<SkImageFilter> {
+                          void* uniformData = reinterpret_cast<void*>(fPtr);
+                          castUniforms(uniformData, fLen, self);
+                          sk_sp<SkData> uniforms;
+                          if (shouldOwnUniforms) {
+                              uniforms = SkData::MakeFromMalloc(uniformData, fLen);
+                          } else {
+                              uniforms = SkData::MakeWithoutCopy(uniformData, fLen);
+                          }
+                          std::vector<std::string> names =
+                                  emscripten::vecFromJSArray<std::string>(jsChildShaderNames);
+                          std::vector<std::string_view> childShaderNames(names.begin(),
+                                                                         names.end());
+                          // Bare pointers from sk_sps owned in JS, or 0 for the source.
+                          SkImageFilter** filters = reinterpret_cast<SkImageFilter**>(inputPtrs);
+                          std::vector<sk_sp<SkImageFilter>> inputs;
+                          for (size_t i = 0; i < names.size(); i++) {
+                              inputs.push_back(sk_ref_sp(filters[i]));
+                          }
+                          SkRuntimeEffectBuilder builder(sk_ref_sp(&self), std::move(uniforms));
+                          // Shaders bound as they are, such as an image of exact values, which an
+                          // input filter would convert to the layer's color type.
+                          std::vector<std::string> shaderNames =
+                                  emscripten::vecFromJSArray<std::string>(jsShaderNames);
+                          SkShader** shaders = reinterpret_cast<SkShader**>(shaderPtrs);
+                          for (size_t i = 0; i < shaderNames.size(); i++) {
+                              SkRuntimeEffectBuilder::BuilderChild child =
+                                      builder.child(shaderNames[i]);
+                              if (!child.fChild) {
+                                  return nullptr;
+                              }
+                              child = sk_ref_sp(shaders[i]);
+                          }
+                          return SkImageFilters::RuntimeShader(builder,
+                                                               sampleRadius,
+                                                               childShaderNames.data(),
+                                                               inputs.data(),
+                                                               static_cast<int>(inputs.size()));
+                      }))
             .function("_makeBlender",
                       optional_override([](SkRuntimeEffect& self,
                                            WASMPointerF32 fPtr,

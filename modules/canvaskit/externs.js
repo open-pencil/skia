@@ -273,6 +273,7 @@ var CanvasKit = {
     _makeShader: function() {},
     _makeShaderWithChildren: function() {},
     _makeImageFilter: function() {},
+    _makeImageFilterWithInputs: function() {},
     _makeBlender: function() {},
   },
 
@@ -530,6 +531,7 @@ var CanvasKit = {
     MakeMatrixTransform: function() {},
     MakeOffset: function() {},
     MakeRuntimeShader: function() {},
+    MakeRuntimeShaderWithInputs: function() {},
 
     prototype: {
       getOutputBounds: function() {},

@@ -3777,6 +3777,26 @@ export interface ImageFilterFactory {
                       input: ImageFilter | null): ImageFilter;
 
     /**
+     * OpenPencil: as MakeRuntimeShader, with several inputs. Each key of inputs names a uniform
+     * shader of the effect, which samples that filter's result (with null, the content being
+     * filtered; as a backdrop filter in saveLayer, the backdrop). Each key of shaders names
+     * another uniform shader, bound to that shader as it is, so an image of exact values is read
+     * without the conversion to the layer's color type an input goes through. Returns null when a
+     * name is not one of the effect's uniform shaders.
+     * @param effect - a shader effect from RuntimeEffect.Make.
+     * @param uniforms - the effect's uniforms, as for RuntimeEffect.makeShader.
+     * @param inputs - the filter each uniform shader samples, by its name.
+     * @param sampleRadius - how far from its own coordinate the effect samples any input, in
+     *                       local units; 0 when it samples only its own coordinate.
+     * @param shaders - the shader each other uniform shader is bound to, by its name.
+     */
+    MakeRuntimeShaderWithInputs(effect: RuntimeEffect,
+                                uniforms: Float32Array | number[] | MallocObj,
+                                inputs: Record<string, ImageFilter | null>,
+                                sampleRadius: number,
+                                shaders?: Record<string, Shader>): ImageFilter | null;
+
+    /**
      * Create a filter that takes a BlendMode and uses it to composite the two filters together.
      *
      *  At least one of background and foreground should be non-null in nearly all circumstances.
