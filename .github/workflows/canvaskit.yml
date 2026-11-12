@@ -1,9 +1,12 @@
-# OpenPencil: builds CanvasKit at every push to openpencil/canvaskit and releases it as
-# canvaskit-<commit>, which open-pencil/open-pencil's packages/canvaskit pins and fetches.
+# OpenPencil: builds CanvasKit for every pull request against openpencil/canvaskit, and at every
+# push to it, which is a merged pull request, releases it as canvaskit-<commit>; that is what
+# open-pencil/open-pencil's packages/canvaskit pins and fetches.
 name: CanvasKit
 
 on:
   push:
+    branches: [openpencil/canvaskit]
+  pull_request:
     branches: [openpencil/canvaskit]
   workflow_dispatch:
 
@@ -22,6 +25,7 @@ jobs:
         with:
           persist-credentials: false
       - run: tools/openpencil/build-canvaskit.sh
-      - env:
+      - if: github.event_name == 'push'
+        env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "canvaskit-$GITHUB_SHA" out/openpencil/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "CanvasKit ${GITHUB_SHA::10}" --notes "CanvasKit built from $GITHUB_SHA. See OPENPENCIL.md for the patches."
