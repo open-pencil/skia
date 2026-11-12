@@ -123,6 +123,7 @@ skia_wasm_lib("canvaskit") {
   sources = [
     "WasmCommon.h",
     "canvaskit_bindings.cpp",
+    "pdf_bindings.cpp",
   ]
   if (skia_canvaskit_enable_paragraph) {
     sources += [
@@ -355,6 +356,13 @@ skia_wasm_lib("canvaskit") {
     # https://github.com/emscripten-core/emscripten/blob/8dc91db45bf96c174531006839472a3924d105aa/src/settings.js#L1204
     "-sINCOMING_MODULE_JS_API=onRuntimeInitialized,locateFile",
   ]
+
+  # OpenPencil: an ES module whose default export is CanvasKitInit, as its types declare, and
+  # which finds canvaskit.wasm beside itself. The classic script stays the default, which the
+  # example page and the Karma tests load.
+  if (skia_canvaskit_es_module) {
+    ldflags += [ "-sEXPORT_ES6" ]
+  }
 
   defines = [
     "SK_FORCE_8_BYTE_ALIGNMENT",

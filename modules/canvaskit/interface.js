@@ -1025,6 +1025,11 @@ CanvasKit.onRuntimeInitialized = function() {
   CanvasKit.Surface.prototype.makeSurface = function(imageInfo) {
     CanvasKit.setCurrentContext(this._context);
     var s = this._makeSurface(imageInfo);
+    // OpenPencil: null when Skia cannot make it, such as a half-float surface without float
+    // color buffers, instead of throwing on the missing surface.
+    if (!s) {
+      return null;
+    }
     s._context = this._context;
     return s;
   };

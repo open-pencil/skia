@@ -468,6 +468,7 @@ export interface CanvasKit {
     readonly Path: PathConstructorAndFactory;
     readonly PathBuilder: PathBuilderConstructor;
     readonly PictureRecorder: DefaultConstructor<PictureRecorder>;
+    readonly PDFDocument: PDFDocumentConstructor;
     readonly TextStyle: TextStyleConstructor;
     readonly SlottableTextProperty: SlottableTextPropertyConstructor;
 
@@ -2934,6 +2935,42 @@ export interface SkPicture extends EmbindObject<"SkPicture"> {
     serialize(): Uint8Array | null;
 }
 
+/**
+ * A PDF written with Skia's PDF backend: each page is an ordinary Canvas, so anything drawn to a
+ * surface's canvas can be drawn to a page. Text keeps its fonts (subset and embedded) and its
+ * characters; effects PDF cannot express are drawn as images at the document's raster DPI.
+ */
+export interface PDFDocument extends EmbindObject<"PDFDocument"> {
+    /**
+     * Starts a page of the given size in points and returns its canvas, valid until endPage();
+     * null once the document is closed or aborted.
+     * @param width
+     * @param height
+     */
+    beginPage(width: number, height: number): Canvas | null;
+
+    /** Ends the current page. */
+    endPage(): void;
+
+    /**
+     * Finishes the document and returns its bytes; the document cannot be drawn to after. Null
+     * when it was already closed or aborted.
+     */
+    close(): Uint8Array | null;
+
+    /** Discards the document. */
+    abort(): void;
+}
+
+export interface PDFDocumentConstructor {
+    /**
+     * @param title - the document's title metadata.
+     * @param creator - the application that made the content.
+     * @param rasterDPI - the resolution of effects drawn as images; 0 for Skia's default (72).
+     */
+    new (title: string, creator: string, rasterDPI: number): PDFDocument;
+}
+
 export interface PictureRecorder extends EmbindObject<"PictureRecorder"> {
     /**
      * Returns a canvas on which to draw. When done drawing, call finishRecordingAsPicture()
@@ -3085,10 +3122,11 @@ export interface Surface extends EmbindObject<"Surface"> {
 
     /**
      * Returns a compatible Surface, haring the same raster or GPU properties of the original.
-     * The pixels are not shared.
+     * The pixels are not shared. OpenPencil: null when one cannot be made, such as a half-float
+     * surface on a GPU context without float color buffers.
      * @param info - width, height, etc of the Surface.
      */
-    makeSurface(info: ImageInfo): Surface;
+    makeSurface(info: ImageInfo): Surface | null;
 
     /**
      * Returns if this Surface is a GPU-backed surface or not.
@@ -3728,6 +3766,43 @@ export interface FontMgrFactory {
  * See //include/effects/SkImageFilters.h for more.
  */
 export interface ImageFilterFactory {
+    /**
+     * OpenPencil: an image filter whose output is the runtime effect evaluated at each pixel. The
+     * effect's uniform shader named childShaderName samples the input filter's result (with no
+     * input, the content being filtered; as a backdrop filter in saveLayer, the backdrop).
+     * @param effect - a shader effect from RuntimeEffect.Make.
+     * @param uniforms - the effect's uniforms, as for RuntimeEffect.makeShader.
+     * @param childShaderName - the effect's uniform shader that samples the input.
+     * @param sampleRadius - how far from its own coordinate the effect samples the child, in
+     *                       local units; 0 when it samples only its own coordinate.
+     * @param input - if null, the filtered content (or backdrop) is used.
+     * Returns null when childShaderName is not one of the effect's uniform shaders or
+     * sampleRadius is negative.
+     */
+    MakeRuntimeShader(effect: RuntimeEffect, uniforms: Float32Array | number[] | MallocObj,
+                      childShaderName: string, sampleRadius: number,
+                      input: ImageFilter | null): ImageFilter | null;
+
+    /**
+     * OpenPencil: as MakeRuntimeShader, with several inputs. Each key of inputs names a uniform
+     * shader of the effect, which samples that filter's result (with null, the content being
+     * filtered; as a backdrop filter in saveLayer, the backdrop). Each key of shaders names
+     * another uniform shader, bound to that shader as it is, so an image of exact values is read
+     * without the conversion to the layer's color type an input goes through. Returns null when a
+     * name is not one of the effect's uniform shaders.
+     * @param effect - a shader effect from RuntimeEffect.Make.
+     * @param uniforms - the effect's uniforms, as for RuntimeEffect.makeShader.
+     * @param inputs - the filter each uniform shader samples, by its name.
+     * @param sampleRadius - how far from its own coordinate the effect samples any input, in
+     *                       local units; 0 when it samples only its own coordinate.
+     * @param shaders - the shader each other uniform shader is bound to, by its name.
+     */
+    MakeRuntimeShaderWithInputs(effect: RuntimeEffect,
+                                uniforms: Float32Array | number[] | MallocObj,
+                                inputs: Record<string, ImageFilter | null>,
+                                sampleRadius: number,
+                                shaders?: Record<string, Shader>): ImageFilter | null;
+
     /**
      * Create a filter that takes a BlendMode and uses it to composite the two filters together.
      *

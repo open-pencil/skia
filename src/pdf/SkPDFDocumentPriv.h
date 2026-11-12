@@ -187,6 +187,8 @@ public:
     skia_private::THashMap<SkTypefaceID, skia_private::THashMap<SkGlyphID, SkString>> fToUnicodeMapEx;
     skia_private::THashMap<SkTypefaceID, SkPDFIndirectReference> fFontDescriptors;
     skia_private::THashMap<SkTypefaceID, SkPDFIndirectReference> fType3FontDescriptors;
+    // OpenPencil: whether each variable typeface embeds as the instance it draws (SkPDFFont.cpp).
+    skia_private::THashMap<SkTypefaceID, bool> fVariableInstances;
     skia_private::THashTable<sk_sp<SkPDFStrike>, const SkDescriptor&, SkPDFStrike::Traits> fStrikes;
     skia_private::THashMap<SkPDFStrokeGraphicState,
                            SkPDFIndirectReference,
