@@ -2860,7 +2860,10 @@ EMSCRIPTEN_BINDINGS(Skia) {
                           for (size_t i = 0; i < shaderNames.size(); i++) {
                               SkRuntimeEffectBuilder::BuilderChild child =
                                       builder.child(shaderNames[i]);
-                              if (!child.fChild) {
+                              // Only a uniform shader takes a shader; a color filter or
+                              // blender child would fail when the filter draws instead.
+                              if (!child.fChild ||
+                                  child.fChild->type != SkRuntimeEffect::ChildType::kShader) {
                                   return nullptr;
                               }
                               child = sk_ref_sp(shaders[i]);
