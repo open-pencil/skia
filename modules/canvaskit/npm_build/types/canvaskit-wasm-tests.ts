@@ -39,6 +39,7 @@ CanvasKitInit({locateFile: (file: string) => '/node_modules/canvaskit/bin/' + fi
     maskFilterTests(CK);
     matrixTests(CK);
     paintTests(CK);
+    pdfDocumentTests(CK);
     paragraphTests(CK);
     paragraphBuilderTests(CK);
     pathEffectTests(CK);
@@ -350,6 +351,13 @@ function imageFilterTests(CK: CanvasKit, colorFilter?: ColorFilter, img?: Image,
     let filter16 = imgf.MakeOffset(5, 3, null); // $ExpectType ImageFilter
     filter16 = imgf.MakeOffset(-100.3, -18, filter16);
     imgf.MakeShader(shader); // $ExpectType ImageFilter
+
+    const effect = CK.RuntimeEffect.Make('uniform shader content; half4 main(float2 p) { return content.eval(p); }');
+    if (!effect) return;
+    const filter17 = imgf.MakeRuntimeShader(effect, [], 'content', 0, null); // $ExpectType ImageFilter | null
+    const filter18 = imgf.MakeRuntimeShader(effect, Float32Array.of(1), 'content', 4, filter16); // $ExpectType ImageFilter | null
+    const filter19 = imgf.MakeRuntimeShaderWithInputs(effect, [], { content: null }, 0); // $ExpectType ImageFilter | null
+    const filter20 = imgf.MakeRuntimeShaderWithInputs(effect, [], { content: filter16 }, 2, { lookup: shader }); // $ExpectType ImageFilter | null
 }
 
 function fontTests(CK: CanvasKit, face?: Typeface, paint?: Paint) {
@@ -451,6 +459,16 @@ function paintTests(CK: CanvasKit, colorFilter?: ColorFilter, imageFilter?: Imag
     paint.setStrokeWidth(20);
     paint.setStyle(CK.PaintStyle.Fill);
     paint.delete();
+}
+
+function pdfDocumentTests(CK: CanvasKit) {
+    const doc = new CK.PDFDocument('Title', 'OpenPencil', 0); // $ExpectType PDFDocument
+    const page = doc.beginPage(612, 792); // $ExpectType Canvas | null
+    page?.drawColor(CK.WHITE);
+    doc.endPage(); // $ExpectType void
+    const bytes = doc.close(); // $ExpectType Uint8Array | null
+    const discarded = new CK.PDFDocument('', '', 300);
+    discarded.abort(); // $ExpectType void
 }
 
 function pathTests(CK: CanvasKit) {
@@ -930,8 +948,8 @@ function surfaceTests(CK: CanvasKit, gl?: WebGLRenderingContext) {
     const ii = surfaceThree.imageInfo(); // $ExpectType ImageInfo
     const h = surfaceFour.height(); // $ExpectType number
     const w = surfaceFive.width(); // $ExpectType number
-    const subsurface = surfaceOne.makeSurface(ii); // $ExpectType Surface
-    const isGPU = subsurface.reportBackendTypeIsGPU(); // $ExpectType boolean
+    const subsurface = surfaceOne.makeSurface(ii); // $ExpectType Surface | null
+    const isGPU = subsurface?.reportBackendTypeIsGPU(); // $ExpectType boolean | undefined
     const count = surfaceThree.sampleCnt(); // $ExpectType number
     const img = surfaceFour.makeImageSnapshot([0, 3, 2, 5]); // $ExpectType Image
     const img2 = surfaceSix.makeImageSnapshot(); // $ExpectType Image
