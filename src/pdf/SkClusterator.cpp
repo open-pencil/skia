@@ -12,6 +12,8 @@
 #include "include/private/base/SkTo.h"
 #include "src/text/GlyphRun.h"
 
+#include <algorithm>
+
 static bool is_reversed(const uint32_t* clusters, uint32_t count) {
     // "ReversedChars" is how PDF deals with RTL text.
     // return true if more than one cluster and monotonicly decreasing to zero.
@@ -35,6 +37,10 @@ SkClusterator::SkClusterator(const sktext::GlyphRun& run)
 {
     if (fClusters) {
         SkASSERT(fUtf8Text && fTextByteLength > 0 && fGlyphCount > 0);
+        fClusterStarts.assign(fClusters, fClusters + fGlyphCount);
+        std::sort(fClusterStarts.begin(), fClusterStarts.end());
+        fClusterStarts.erase(std::unique(fClusterStarts.begin(), fClusterStarts.end()),
+                             fClusterStarts.end());
     } else {
         SkASSERT(!fUtf8Text && fTextByteLength == 0);
     }
@@ -53,13 +59,11 @@ SkClusterator::Cluster SkClusterator::next() {
         ++fCurrentGlyphIndex;
     } while (fCurrentGlyphIndex < fGlyphCount && cluster == fClusters[fCurrentGlyphIndex]);
     uint32_t clusterGlyphCount = fCurrentGlyphIndex - clusterGlyphIndex;
-    uint32_t clusterEnd = fTextByteLength;
-    for (unsigned i = 0; i < fGlyphCount; ++i) {
-       uint32_t c = fClusters[i];
-       if (c > cluster && c < clusterEnd) {
-           clusterEnd = c;
-       }
-    }
+    // The cluster's text ends where the next larger cluster starts, or with the text.
+    auto nextStart = std::upper_bound(fClusterStarts.begin(), fClusterStarts.end(), cluster);
+    uint32_t clusterEnd = nextStart == fClusterStarts.end()
+                                  ? fTextByteLength
+                                  : std::min(*nextStart, fTextByteLength);
     uint32_t clusterLen = clusterEnd - cluster;
     return Cluster{fUtf8Text + cluster, clusterLen, clusterGlyphIndex, clusterGlyphCount};
 }
