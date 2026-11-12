@@ -178,6 +178,10 @@ sk_sp<SkData> subset_harfbuzz(const SkTypeface& typeface, const SkPDFGlyphUse& g
     // static TrueType font rather than as Type3 outlines.
     int axisCount = typeface.getVariationDesignPosition({});
     if (axisCount > 0) {
+#if HB_VERSION_ATLEAST(8, 3, 1)
+        if (!SkPDFCanInstanceVariableFonts()) {
+            return nullptr;
+        }
         std::vector<SkFontArguments::VariationPosition::Coordinate> position(axisCount);
         if (typeface.getVariationDesignPosition(position) != axisCount ||
             !hb_subset_input_pin_all_axes_to_default(input.get(), face.get())) {
@@ -189,6 +193,9 @@ sk_sp<SkData> subset_harfbuzz(const SkTypeface& typeface, const SkPDFGlyphUse& g
                 return nullptr;
             }
         }
+#else
+        return nullptr;
+#endif
     }
 
     HBFace subset = make_subset(input.get(), face.get(), glyphUsage.has(0));
@@ -215,6 +222,16 @@ bool SkPDFCanSubsetTableBasedFonts() {
     return hb_version_atleast(4, 4, 0);
 }
 
+bool SkPDFCanInstanceVariableFonts() {
+    // hb_subset_input_pin_all_axes_to_default is in HarfBuzz 8.3.1 and later, at build time and
+    // in the library loaded.
+#if HB_VERSION_ATLEAST(8, 3, 1)
+    return SkPDFCanSubsetTableBasedFonts() && hb_version_atleast(8, 3, 1);
+#else
+    return false;
+#endif
+}
+
 #else
 
 sk_sp<SkData> SkPDFSubsetFont(const SkTypeface&, const SkPDFGlyphUse&) {
@@ -222,6 +239,10 @@ sk_sp<SkData> SkPDFSubsetFont(const SkTypeface&, const SkPDFGlyphUse&) {
 }
 
 bool SkPDFCanSubsetTableBasedFonts() {
+    return false;
+}
+
+bool SkPDFCanInstanceVariableFonts() {
     return false;
 }
 
