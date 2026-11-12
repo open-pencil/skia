@@ -58,6 +58,11 @@ public:
 #if defined(SK_CODEC_ENCODES_JPEG)
         metadata.jpegEncoder = encodeJpeg;
 #endif
+#if !defined(SK_CODEC_DECODES_JPEG) || !defined(SK_CODEC_ENCODES_JPEG)
+        // Without both codecs the document embeds images losslessly; SkPDF aborts on a missing
+        // one unless told that is intended.
+        metadata.allowNoJpegs = true;
+#endif
         fDocument = SkPDF::MakeDocument(&fStream, metadata);
     }
 
