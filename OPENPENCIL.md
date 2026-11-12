@@ -1,6 +1,6 @@
 # OpenPencil fork notes
 
-This fork is maintained for [OpenPencil](https://github.com/open-pencil/open-pencil).
+This fork is maintained for [OpenPencil](https://github.com/open-pencil/open-pencil). Its branch changes only through reviewed pull requests; `AGENTS.md` has the rules.
 
 The `openpencil/canvaskit` branch is the CanvasKit release OpenPencil ships, from `Release Canvaskit v0.41.1`, with these patches on top:
 
