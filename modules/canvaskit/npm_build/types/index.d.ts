@@ -2942,17 +2942,21 @@ export interface SkPicture extends EmbindObject<"SkPicture"> {
  */
 export interface PDFDocument extends EmbindObject<"PDFDocument"> {
     /**
-     * Starts a page of the given size in points and returns its canvas, valid until endPage().
+     * Starts a page of the given size in points and returns its canvas, valid until endPage();
+     * null once the document is closed or aborted.
      * @param width
      * @param height
      */
-    beginPage(width: number, height: number): Canvas;
+    beginPage(width: number, height: number): Canvas | null;
 
     /** Ends the current page. */
     endPage(): void;
 
-    /** Finishes the document and returns its bytes; the document cannot be drawn to after. */
-    close(): Uint8Array;
+    /**
+     * Finishes the document and returns its bytes; the document cannot be drawn to after. Null
+     * when it was already closed or aborted.
+     */
+    close(): Uint8Array | null;
 
     /** Discards the document. */
     abort(): void;
@@ -3772,10 +3776,12 @@ export interface ImageFilterFactory {
      * @param sampleRadius - how far from its own coordinate the effect samples the child, in
      *                       local units; 0 when it samples only its own coordinate.
      * @param input - if null, the filtered content (or backdrop) is used.
+     * Returns null when childShaderName is not one of the effect's uniform shaders or
+     * sampleRadius is negative.
      */
     MakeRuntimeShader(effect: RuntimeEffect, uniforms: Float32Array | number[] | MallocObj,
                       childShaderName: string, sampleRadius: number,
-                      input: ImageFilter | null): ImageFilter;
+                      input: ImageFilter | null): ImageFilter | null;
 
     /**
      * OpenPencil: as MakeRuntimeShader, with several inputs. Each key of inputs names a uniform
