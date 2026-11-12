@@ -24,7 +24,7 @@ bin/fetch-gn
 
 # Homebrew headers must not leak into Emscripten's sysroot.
 unset CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH
-bash modules/canvaskit/compile.sh release
+bash modules/canvaskit/compile.sh release es_module
 
 mkdir -p out/openpencil
 cp out/canvaskit_wasm/canvaskit.js out/canvaskit_wasm/canvaskit.wasm out/openpencil/
