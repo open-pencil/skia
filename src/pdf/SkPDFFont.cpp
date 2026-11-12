@@ -15,7 +15,9 @@
 #include "include/core/SkData.h"
 #include "include/core/SkDrawable.h"
 #include "include/core/SkFont.h"
+#include "include/core/SkFontArguments.h"
 #include "include/core/SkFontMetrics.h"
+#include "include/core/SkFontParameters.h"
 #include "include/core/SkFontStyle.h"
 #include "include/core/SkFontTypes.h"
 #include "include/core/SkImage.h"
@@ -67,6 +69,7 @@
 #include <cstddef>
 #include <initializer_list>
 #include <memory>
+#include <vector>
 #include <optional>
 #include <utility>
 
@@ -328,13 +331,66 @@ THashMap<SkGlyphID, SkString>& SkPDFFont::GetUnicodeMapEx(const SkTypeface& type
     return *canon->fToUnicodeMapEx.set(id, THashMap<SkGlyphID, SkString>());
 }
 
+// OpenPencil: whether a typeface draws its variable font's default instance, which the font's own
+// data draws without instancing.
+static bool is_default_instance(const SkTypeface& typeface) {
+    int axisCount = typeface.getVariationDesignParameters({});
+    if (axisCount <= 0) {
+        return true;
+    }
+    std::vector<SkFontParameters::Variation::Axis> axes(axisCount);
+    std::vector<SkFontArguments::VariationPosition::Coordinate> position(axisCount);
+    if (typeface.getVariationDesignParameters(axes) != axisCount ||
+        typeface.getVariationDesignPosition(position) != axisCount) {
+        return false;
+    }
+    for (const auto& coordinate : position) {
+        for (const auto& axis : axes) {
+            if (axis.tag == coordinate.axis && axis.def != coordinate.value) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// OpenPencil: whether a variable TrueType font embeds as the instance the typeface draws. The
+// font's type is settled before any glyph is drawn and cannot change after, while
+// emit_subset_type0 embeds the whole variable font, which draws its default instance, where
+// subsetting is not allowed or fails. So an instance other than the default embeds as TrueType
+// only where the font may be subset and HarfBuzz cuts that instance; once per typeface and
+// document, with glyph 0 alone.
+static bool embeds_variable_instance(const SkTypeface& typeface,
+                                     const SkAdvancedTypefaceMetrics& metrics,
+                                     SkPDFDocument* doc) {
+    if (!SkPDFCanInstanceVariableFonts()) {
+        return false;
+    }
+    if (is_default_instance(typeface)) {
+        return true;
+    }
+    if (!can_subset(metrics)) {
+        return false;
+    }
+    SkTypefaceID id = typeface.uniqueID();
+    if (const bool* known = doc->fVariableInstances.find(id)) {
+        return *known;
+    }
+    SkPDFGlyphUse notdef(1, 1);
+    notdef.set(0);
+    bool instanced = SkPDFSubsetFont(typeface, notdef) != nullptr;
+    doc->fVariableInstances.set(id, instanced);
+    return instanced;
+}
+
 SkAdvancedTypefaceMetrics::FontType SkPDFFont::FontType(const SkPDFStrike& pdfStrike,
                                                         const SkAdvancedTypefaceMetrics& metrics) {
     // OpenPencil: a variable TrueType font embeds as the instance it draws, which the HarfBuzz
     // subsetter cuts; where it cannot, the font is drawn as Type3 outlines.
     if ((SkToBool(metrics.fFlags & SkAdvancedTypefaceMetrics::kVariable_FontFlag) &&
          (metrics.fType != SkAdvancedTypefaceMetrics::kTrueType_Font ||
-          !SkPDFCanInstanceVariableFonts())) ||
+          !embeds_variable_instance(pdfStrike.fPath.fStrikeSpec.typeface(), metrics,
+                                    pdfStrike.fDoc))) ||
         // PDF is actually interested in the encoding of the data, not just the logical format.
         // If the TrueType is actually wOFF or wOF2 then it should not be directly embedded in PDF.
         // Export these as Type3 if the subsetter cannot handle table based fonts.

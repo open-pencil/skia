@@ -85,9 +85,17 @@ private:
     skif::LayerSpace<SkIRect> applyMaxSampleRadius(
             const skif::Mapping& mapping,
             skif::LayerSpace<SkIRect> bounds) const {
-        skif::LayerSpace<SkISize> maxSampleRadius = mapping.paramToLayer(
-                skif::ParameterSpace<SkSize>({fMaxSampleRadius, fMaxSampleRadius})).ceil();
-        bounds.outset(maxSampleRadius);
+        // OpenPencil: the samples within the radius of a point fill a square around it in
+        // parameter space, which a layer matrix this filter now accepts can rotate or shear. The
+        // input reaches as far as that square's corners, right ± down, rather than the lengths
+        // its axes map to, which fall short of them under a rotation or shear.
+        skif::LayerSpace<skif::Vector> right = mapping.paramToLayer(
+                skif::ParameterSpace<skif::Vector>({fMaxSampleRadius, 0.f}));
+        skif::LayerSpace<skif::Vector> down = mapping.paramToLayer(
+                skif::ParameterSpace<skif::Vector>({0.f, fMaxSampleRadius}));
+        bounds.outset(skif::LayerSpace<SkISize>(
+                {SkScalarCeilToInt(SkScalarAbs(right.x()) + SkScalarAbs(down.x())),
+                 SkScalarCeilToInt(SkScalarAbs(right.y()) + SkScalarAbs(down.y()))}));
         return bounds;
     }
 
