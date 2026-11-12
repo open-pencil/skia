@@ -102,12 +102,18 @@ void Run::copyTo(SkTextBlobBuilder& builder, size_t pos, size_t size) const {
         textStart = std::min<size_t>(textStart, fClusterIndexes[i]);
         lastCluster = std::max<size_t>(lastCluster, fClusterIndexes[i]);
     }
-    // The text ends where the next cluster after the last one starts, or with the run.
+    // The text ends where the next cluster after the last one starts, or with the run. A run's
+    // clusters only rise (left to right) or only fall (right to left), so that cluster is the
+    // first other one just after the slice or just before it; looking only there keeps copying
+    // the lines of a long run linear.
     size_t textEnd = fTextRange.end - fClusterStart;
-    for (size_t i = 0; i <= this->size(); ++i) {
+    auto nextCluster = [&](size_t i) {
         size_t cluster = fClusterIndexes[i];
         if (cluster > lastCluster && cluster < textEnd) textEnd = cluster;
-    }
+        return cluster != lastCluster;
+    };
+    for (size_t i = pos + size; i <= this->size() && !nextCluster(i); ++i) {}
+    for (size_t i = pos; i > 0 && !nextCluster(i - 1); --i) {}
     SkSpan<const char> paragraphText = fOwner ? fOwner->text() : SkSpan<const char>();
     bool withText = !fEllipsis && size > 0 && textStart != SIZE_MAX && textEnd > textStart &&
                     fClusterStart + textEnd <= paragraphText.size();
