@@ -665,12 +665,12 @@ void ParagraphImpl::breakShapedTextIntoLines(SkScalar maxWidth) {
                       clusterRange, clusterRangeWithGhosts, run.advance().x(),
                       metrics);
 
-        fLongestLine = nearlyZero(advance.fX) ? run.advance().fX : advance.fX;
-        fLongestLine -= fLines.back().trailingLetterSpacing();
+        auto trailingSpacing = fLines.back().trailingLetterSpacing();
+        fLongestLine = (nearlyZero(advance.fX) ? run.advance().fX : advance.fX) - trailingSpacing;
         fHeight = advance.fY;
         fWidth = maxWidth;
-        fMaxIntrinsicWidth = run.advance().fX;
-        fMinIntrinsicWidth = advance.fX;
+        fMaxIntrinsicWidth = run.advance().fX - trailingSpacing;
+        fMinIntrinsicWidth = advance.fX - trailingSpacing;
         fAlphabeticBaseline = fLines.empty() ? fEmptyMetrics.alphabeticBaseline() : fLines.front().alphabeticBaseline();
         fIdeographicBaseline = fLines.empty() ? fEmptyMetrics.ideographicBaseline() : fLines.front().ideographicBaseline();
         fExceededMaxLines = false;
@@ -698,7 +698,7 @@ void ParagraphImpl::breakShapedTextIntoLines(SkScalar maxWidth) {
                 if (addEllipsis) {
                     line.createEllipsis(maxWidth, this->getEllipsis(), true);
                 }
-                fLongestLine = std::max(fLongestLine, nearlyZero(line.width()) ? widthWithSpaces : line.width() - line.trailingLetterSpacing());
+                fLongestLine = std::max(fLongestLine, (nearlyZero(line.width()) ? widthWithSpaces : line.width()) - line.trailingLetterSpacing());
             });
 
     fHeight = textWrapper.height();

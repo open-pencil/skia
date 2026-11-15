@@ -147,7 +147,8 @@ public:
 
 private:
     std::unique_ptr<Run> shapeEllipsis(const SkString& ellipsis, const Cluster* cluster);
-    void justify(SkScalar maxWidth);
+    // Returns false when the line has no spaces between words to stretch.
+    bool justify(SkScalar maxWidth);
 
     void buildTextBlob(TextRange textRange, const TextStyle& style, const ClipContext& context);
     void paintBackground(ParagraphPainter* painter,

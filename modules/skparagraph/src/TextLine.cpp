@@ -323,7 +323,14 @@ void TextLine::format(TextAlign align, SkScalar maxWidth) {
         if (!this->endsWithHardLineBreak()) {
             // OpenPencil: negative spacing after the last glyph would stretch the glyphs past
             // the box; they end at its edge instead.
-            this->justify(maxWidth + std::min<SkScalar>(0, this->trailingLetterSpacing()));
+            bool justified =
+                    this->justify(maxWidth + std::min<SkScalar>(0, this->trailingLetterSpacing()));
+            // OpenPencil: a right-to-left line with nothing to stretch is right-aligned as any
+            // other trimmed line is.
+            if (!justified && fOwner->paragraphStyle().getTrimLetterSpacing() &&
+                fOwner->paragraphStyle().getTextDirection() == TextDirection::kRtl) {
+                fShift = delta;
+            }
         } else if (fOwner->paragraphStyle().getTextDirection() == TextDirection::kRtl) {
             // Justify -> Right align
             fShift = delta;
@@ -466,7 +473,7 @@ void TextLine::paintDecorations(ParagraphPainter* painter, SkScalar x, SkScalar 
     decorations.paint(painter, style, context, correctedBaseline);
 }
 
-void TextLine::justify(SkScalar maxWidth) {
+bool TextLine::justify(SkScalar maxWidth) {
     int whitespacePatches = 0;
     SkScalar textLen = 0;
     SkScalar whitespaceLen = 0;
@@ -510,7 +517,7 @@ void TextLine::justify(SkScalar maxWidth) {
             // Justify -> Right align
             fShift = maxWidth - textLen;
         }
-        return;
+        return false;
     }
 
     SkScalar step = (maxWidth - textLen + whitespaceLen) / whitespacePatches;
@@ -573,6 +580,7 @@ void TextLine::justify(SkScalar maxWidth) {
 
     this->fWidthWithSpaces += ghostShift;
     this->fAdvance.fX = maxWidth;
+    return true;
 }
 
 void TextLine::shiftCluster(const Cluster* cluster, SkScalar shift, SkScalar prevShift) {

@@ -109,6 +109,13 @@ void TextWrapper::lookAhead(SkScalar maxWidth, Cluster* endOfClusters, bool appl
             const Cluster* lastOfWord = nullptr;
             for (auto further = cluster; further != endOfClusters; ++further) {
                 if (further->isSoftBreak() || further->isHardBreak() || further->isWhitespaceBreak()) {
+                    // OpenPencil: a line that breaks at a soft break ends on that cluster, so
+                    // its trimmed fit measures it.
+                    if (trimLetterSpacing && further->isSoftBreak() && !further->isHardBreak() &&
+                        !further->isWhitespaceBreak() && maxWidth != 0) {
+                        nextWordLength += further->width();
+                        lastOfWord = further;
+                    }
                     break;
                 }
                 if (further->run().isPlaceholder()) {
@@ -418,7 +425,11 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
 
         softLineMaxIntrinsicWidth += widthWithSpaces;
 
-        fMaxIntrinsicWidth = std::max(fMaxIntrinsicWidth, softLineMaxIntrinsicWidth);
+        // OpenPencil: a hard line is as wide as its glyphs, without the spacing after its last.
+        SkScalar hardLineTrim = fHardLineBreak || startLine == end
+                ? parent->trailingLetterSpacing(clusters)
+                : 0;
+        fMaxIntrinsicWidth = std::max(fMaxIntrinsicWidth, softLineMaxIntrinsicWidth - hardLineTrim);
         if (fHardLineBreak) {
             softLineMaxIntrinsicWidth = 0;
         }
