@@ -11,6 +11,10 @@
 #include "modules/skshaper/include/SkShaper.h"
 #include "src/base/SkUTF.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+
 namespace skia {
 namespace textlayout {
 
@@ -89,6 +93,47 @@ SkShaper::RunHandler::Buffer Run::newRunBuffer() {
 
 void Run::copyTo(SkTextBlobBuilder& builder, size_t pos, size_t size) const {
     SkASSERT(pos + size <= this->size());
+    // OpenPencil: give the blob the text and clusters its glyphs came from, so documents such
+    // as PDF can map shaped glyphs (Arabic joining forms, ligatures) back to their characters.
+    // Clusters are UTF-8 offsets into this run's slice of the paragraph text.
+    size_t textStart = SIZE_MAX;
+    size_t lastCluster = 0;
+    for (size_t i = pos; i < pos + size; ++i) {
+        textStart = std::min<size_t>(textStart, fClusterIndexes[i]);
+        lastCluster = std::max<size_t>(lastCluster, fClusterIndexes[i]);
+    }
+    // The text ends where the next cluster after the last one starts, or with the run. A run's
+    // clusters only rise (left to right) or only fall (right to left), so that cluster is the
+    // first other one just after the slice or just before it; looking only there keeps copying
+    // the lines of a long run linear.
+    size_t textEnd = fTextRange.end - fClusterStart;
+    auto nextCluster = [&](size_t i) {
+        size_t cluster = fClusterIndexes[i];
+        if (cluster > lastCluster && cluster < textEnd) textEnd = cluster;
+        return cluster != lastCluster;
+    };
+    for (size_t i = pos + size; i <= this->size() && !nextCluster(i); ++i) {}
+    for (size_t i = pos; i > 0 && !nextCluster(i - 1); --i) {}
+    SkSpan<const char> paragraphText = fOwner ? fOwner->text() : SkSpan<const char>();
+    bool withText = !fEllipsis && size > 0 && textStart != SIZE_MAX && textEnd > textStart &&
+                    fClusterStart + textEnd <= paragraphText.size();
+    if (withText) {
+        size_t textBytes = textEnd - textStart;
+        const auto& blobBuffer =
+                builder.allocRunTextPos(fFont, SkToInt(size), SkToInt(textBytes));
+        sk_careful_memcpy(blobBuffer.glyphs, fGlyphs.data() + pos, size * sizeof(SkGlyphID));
+        memcpy(blobBuffer.utf8text, paragraphText.data() + fClusterStart + textStart, textBytes);
+        for (size_t i = 0; i < size; ++i) {
+            blobBuffer.clusters[i] = SkToU32(fClusterIndexes[i + pos] - textStart);
+            auto point = fPositions[i + pos];
+            if (!fJustificationShifts.empty()) {
+                point.fX += fJustificationShifts[i + pos].fX;
+            }
+            point += fOffsets[i + pos];
+            blobBuffer.points()[i] = point;
+        }
+        return;
+    }
     const auto& blobBuffer = builder.allocRunPos(fFont, SkToInt(size));
     sk_careful_memcpy(blobBuffer.glyphs, fGlyphs.data() + pos, size * sizeof(SkGlyphID));
 

@@ -267,6 +267,7 @@ struct SimpleParagraphStyle {
     SimpleTextStyle textStyle;
     SimpleStrutStyle strutStyle;
     bool applyRoundingHack;
+    bool trimLetterSpacing;
 };
 
 para::ParagraphStyle toParagraphStyle(const SimpleParagraphStyle& s) {
@@ -293,6 +294,7 @@ para::ParagraphStyle toParagraphStyle(const SimpleParagraphStyle& s) {
         ps.setMaxLines(s.maxLines);
     }
     ps.setApplyRoundingHack(s.applyRoundingHack);
+    ps.setTrimLetterSpacing(s.trimLetterSpacing);
     ps.setTextHeightBehavior(s.textHeightBehavior);
     ps.setReplaceTabCharacters(s.replaceTabCharacters);
     return ps;
@@ -803,7 +805,8 @@ EMSCRIPTEN_BINDINGS(Paragraph) {
         .field("textHeightBehavior",   &SimpleParagraphStyle::textHeightBehavior)
         .field("textStyle",            &SimpleParagraphStyle::textStyle)
         .field("strutStyle",           &SimpleParagraphStyle::strutStyle)
-        .field("applyRoundingHack",    &SimpleParagraphStyle::applyRoundingHack);
+        .field("applyRoundingHack",    &SimpleParagraphStyle::applyRoundingHack)
+        .field("trimLetterSpacing",    &SimpleParagraphStyle::trimLetterSpacing);
 
     value_object<SimpleStrutStyle>("StrutStyle")
         .field("_fontFamiliesPtr", &SimpleStrutStyle::fontFamiliesPtr)

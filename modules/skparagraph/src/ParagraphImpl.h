@@ -119,6 +119,10 @@ public:
 
     bool getApplyRoundingHack() const { return fParagraphStyle.getApplyRoundingHack(); }
 
+    // OpenPencil: with ParagraphStyle::getTrimLetterSpacing, the letter spacing after the last
+    // glyph in `clusters`, past any spaces, which a line of those clusters leaves out.
+    SkScalar trailingLetterSpacing(ClusterRange clusters) const;
+
     size_t lineNumber() override { return fLines.size(); }
 
     TextLine& addLine(SkVector offset, SkVector advance,

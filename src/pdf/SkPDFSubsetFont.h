@@ -18,4 +18,9 @@ sk_sp<SkData> SkPDFSubsetFont(const SkTypeface& typeface, const SkPDFGlyphUse& g
 
 bool SkPDFCanSubsetTableBasedFonts();
 
+/** OpenPencil: whether SkPDFSubsetFont can cut a variable font to the instance a typeface draws,
+ *  which takes HarfBuzz 8.3.1 or later.
+ */
+bool SkPDFCanInstanceVariableFonts();
+
 #endif  // SkPDFSubsetFont_DEFINED
