@@ -611,7 +611,8 @@ function paragraphBuilderTests(CK: CanvasKit, fontMgr?: FontMgr, paint?: Paint) 
         disableHinting: true,
         heightMultiplier: 2.5,
         textDirection: CK.TextDirection.LTR,
-        textHeightBehavior: CK.TextHeightBehavior.DisableFirstAscent
+        textHeightBehavior: CK.TextHeightBehavior.DisableFirstAscent,
+        trimLetterSpacing: true,
     });
     const blueText = new CK.TextStyle({ // $ExpectType TextStyle
         backgroundColor: CK.Color(234, 208, 232), // light pink

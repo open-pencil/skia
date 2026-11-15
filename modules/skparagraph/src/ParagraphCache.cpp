@@ -186,6 +186,7 @@ uint32_t ParagraphCacheKey::computeHash() const {
     hash = mix(hash, SkGoodHash()(relax(fParagraphStyle.getHeight())));
     hash = mix(hash, SkGoodHash()(fParagraphStyle.getTextDirection()));
     hash = mix(hash, SkGoodHash()(fParagraphStyle.getReplaceTabCharacters() ? 1 : 0));
+    hash = mix(hash, SkGoodHash()(fParagraphStyle.getTrimLetterSpacing() ? 1 : 0));
 
     auto& strutStyle = fParagraphStyle.getStrutStyle();
     if (strutStyle.getStrutEnabled()) {
@@ -224,6 +225,9 @@ bool ParagraphCacheKey::operator==(const ParagraphCacheKey& other) const {
 
     // There is no need to compare default paragraph styles - they are included into fTextStyles
     if (!exactlyEqual(fParagraphStyle.getHeight(), other.fParagraphStyle.getHeight())) {
+        return false;
+    }
+    if (fParagraphStyle.getTrimLetterSpacing() != other.fParagraphStyle.getTrimLetterSpacing()) {
         return false;
     }
     if (fParagraphStyle.getTextDirection() != other.fParagraphStyle.getTextDirection()) {

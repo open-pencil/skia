@@ -176,7 +176,8 @@ TextLine::TextLine(ParagraphImpl* owner,
     }
 
     // TODO: This is the fix for flutter. Must be removed...
-    for (auto cluster = &start; cluster <= &end; ++cluster) {
+    // OpenPencil: a line that trims letter spacing starts at its first glyph.
+    for (auto cluster = &start; cluster <= &end && !fOwner->paragraphStyle().getTrimLetterSpacing(); ++cluster) {
         if (!cluster->run().isPlaceholder() && !cluster->run().isCursiveScript()) {
             fShift += cluster->getHalfLetterSpacing();
             break;
@@ -295,16 +296,41 @@ void TextLine::ensureTextBlobCachePopulated() {
     fTextBlobCachePopulated = true;
 }
 
+SkScalar TextLine::trailingLetterSpacing() const {
+    if (fEllipsis != nullptr) {
+        return 0;
+    }
+    return fOwner->trailingLetterSpacing(fClusterRange);
+}
+
 void TextLine::format(TextAlign align, SkScalar maxWidth) {
-    SkScalar delta = maxWidth - this->width();
-    if (delta <= 0) {
+    // OpenPencil: a line wrapped at a space aligns with the spacing after its last glyph; the
+    // paragraph's last line and a line split inside a word align by their glyphs.
+    bool wrappedAtSpace = !this->endsWithHardLineBreak() &&
+                          this != &fOwner->lines().back() &&
+                          fGhostClusterRange.end > fClusterRange.end;
+    SkScalar delta = maxWidth - this->width() + (wrappedAtSpace ? 0 : this->trailingLetterSpacing());
+    // OpenPencil: a right or centred line wider than the box, by the spacing it aligns with,
+    // starts left of the box, as design tools put it.
+    bool overflows = fOwner->paragraphStyle().getTrimLetterSpacing() &&
+                     (align == TextAlign::kRight || align == TextAlign::kCenter);
+    if (delta <= 0 && !overflows) {
         return;
     }
 
     // We do nothing for left align
     if (align == TextAlign::kJustify) {
         if (!this->endsWithHardLineBreak()) {
-            this->justify(maxWidth);
+            // OpenPencil: negative spacing after the last glyph would stretch the glyphs past
+            // the box; they end at its edge instead.
+            bool justified =
+                    this->justify(maxWidth + std::min<SkScalar>(0, this->trailingLetterSpacing()));
+            // OpenPencil: a right-to-left line with nothing to stretch is right-aligned as any
+            // other trimmed line is.
+            if (!justified && fOwner->paragraphStyle().getTrimLetterSpacing() &&
+                fOwner->paragraphStyle().getTextDirection() == TextDirection::kRtl) {
+                fShift = delta;
+            }
         } else if (fOwner->paragraphStyle().getTextDirection() == TextDirection::kRtl) {
             // Justify -> Right align
             fShift = delta;
@@ -447,7 +473,7 @@ void TextLine::paintDecorations(ParagraphPainter* painter, SkScalar x, SkScalar 
     decorations.paint(painter, style, context, correctedBaseline);
 }
 
-void TextLine::justify(SkScalar maxWidth) {
+bool TextLine::justify(SkScalar maxWidth) {
     int whitespacePatches = 0;
     SkScalar textLen = 0;
     SkScalar whitespaceLen = 0;
@@ -491,7 +517,7 @@ void TextLine::justify(SkScalar maxWidth) {
             // Justify -> Right align
             fShift = maxWidth - textLen;
         }
-        return;
+        return false;
     }
 
     SkScalar step = (maxWidth - textLen + whitespaceLen) / whitespacePatches;
@@ -554,6 +580,7 @@ void TextLine::justify(SkScalar maxWidth) {
 
     this->fWidthWithSpaces += ghostShift;
     this->fAdvance.fX = maxWidth;
+    return true;
 }
 
 void TextLine::shiftCluster(const Cluster* cluster, SkScalar shift, SkScalar prevShift) {
@@ -1127,7 +1154,7 @@ LineMetrics TextLine::getMetrics() const {
     result.fDescent = fMaxRunMetrics.descent();
     result.fUnscaledAscent = - fMaxRunMetrics.ascent(); // TODO: implement
     result.fHeight = fAdvance.fY;
-    result.fWidth = fAdvance.fX;
+    result.fWidth = fAdvance.fX - this->trailingLetterSpacing();
     if (fOwner->getApplyRoundingHack()) {
         result.fHeight = littleRound(result.fHeight);
         result.fWidth = littleRound(result.fWidth);

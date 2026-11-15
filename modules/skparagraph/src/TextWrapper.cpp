@@ -49,7 +49,19 @@ struct LineBreakerWithLittleRounding {
 
 // Since we allow cluster clipping when they don't fit
 // we have to work with stretches - parts of clusters
-void TextWrapper::lookAhead(SkScalar maxWidth, Cluster* endOfClusters, bool applyRoundingHack) {
+namespace {
+// OpenPencil: with ParagraphStyle::getTrimLetterSpacing, the spacing after a glyph cluster that
+// ends a line, which the line's fit leaves out; a space ends no line, so it has none.
+SkScalar trailingSpacing(const Cluster* cluster, bool trim) {
+    if (!trim || cluster->isWhitespaceBreak() || cluster->run().isPlaceholder()) {
+        return 0;
+    }
+    return cluster->getHalfLetterSpacing() * 2;
+}
+}  // namespace
+
+void TextWrapper::lookAhead(SkScalar maxWidth, Cluster* endOfClusters, bool applyRoundingHack,
+                            bool trimLetterSpacing) {
 
     reset();
     fEndLine.metrics().clean();
@@ -63,7 +75,8 @@ void TextWrapper::lookAhead(SkScalar maxWidth, Cluster* endOfClusters, bool appl
         if (cluster->isHardBreak()) {
         } else if (
                 // TODO: Trying to deal with flutter rounding problem. Must be removed...
-                SkScalar width = fWords.width() + fClusters.width() + cluster->width();
+                SkScalar width = fWords.width() + fClusters.width() + cluster->width() -
+                                 trailingSpacing(cluster, trimLetterSpacing);
                 breaker.breakLine(width)) {
             if (cluster->isWhitespaceBreak()) {
                 // It's the end of the word
@@ -93,8 +106,16 @@ void TextWrapper::lookAhead(SkScalar maxWidth, Cluster* endOfClusters, bool appl
             // Walk further to see if there is a too long word, cluster or glyph
             SkScalar nextWordLength = fClusters.width();
             SkScalar nextShortWordLength = nextWordLength;
+            const Cluster* lastOfWord = nullptr;
             for (auto further = cluster; further != endOfClusters; ++further) {
                 if (further->isSoftBreak() || further->isHardBreak() || further->isWhitespaceBreak()) {
+                    // OpenPencil: a line that breaks at a soft break ends on that cluster, so
+                    // its trimmed fit measures it.
+                    if (trimLetterSpacing && further->isSoftBreak() && !further->isHardBreak() &&
+                        !further->isWhitespaceBreak() && maxWidth != 0) {
+                        nextWordLength += further->width();
+                        lastOfWord = further;
+                    }
                     break;
                 }
                 if (further->run().isPlaceholder()) {
@@ -114,6 +135,10 @@ void TextWrapper::lookAhead(SkScalar maxWidth, Cluster* endOfClusters, bool appl
                 } else {
                     nextWordLength += further->width();
                 }
+                lastOfWord = further;
+            }
+            if (lastOfWord != nullptr && maxWidth != 0) {
+                nextWordLength -= trailingSpacing(lastOfWord, trimLetterSpacing);
             }
             if (nextWordLength > maxWidth) {
                 if (nextNonBreakingSpace != nullptr) {
@@ -143,7 +168,7 @@ void TextWrapper::lookAhead(SkScalar maxWidth, Cluster* endOfClusters, bool appl
                 }
             }
 
-            if (cluster->width() > maxWidth) {
+            if (cluster->width() - trailingSpacing(cluster, trimLetterSpacing) > maxWidth) {
                 fClusters.extend(cluster);
                 fTooLongCluster = true;
                 fTooLongWord = true;
@@ -303,7 +328,8 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
     bool needEllipsis = false;
     while (fEndLine.endCluster() != end) {
 
-        this->lookAhead(maxWidth, end, parent->getApplyRoundingHack());
+        this->lookAhead(maxWidth, end, parent->getApplyRoundingHack(),
+                        parent->paragraphStyle().getTrimLetterSpacing());
 
         auto lastLine = (hasEllipsis && unlimitedLines) || fLineNumber >= maxLines;
         needEllipsis = hasEllipsis && !endlessLine && lastLine;
@@ -399,7 +425,11 @@ void TextWrapper::breakTextIntoLines(ParagraphImpl* parent,
 
         softLineMaxIntrinsicWidth += widthWithSpaces;
 
-        fMaxIntrinsicWidth = std::max(fMaxIntrinsicWidth, softLineMaxIntrinsicWidth);
+        // OpenPencil: a hard line is as wide as its glyphs, without the spacing after its last.
+        SkScalar hardLineTrim = fHardLineBreak || startLine == end
+                ? parent->trailingLetterSpacing(clusters)
+                : 0;
+        fMaxIntrinsicWidth = std::max(fMaxIntrinsicWidth, softLineMaxIntrinsicWidth - hardLineTrim);
         if (fHardLineBreak) {
             softLineMaxIntrinsicWidth = 0;
         }
