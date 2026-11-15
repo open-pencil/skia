@@ -1303,6 +1303,12 @@ export interface ParagraphStyle {
     textHeightBehavior?: TextHeightBehavior;
     textStyle?: TextStyle;
     applyRoundingHack?: boolean;
+    /**
+     * OpenPencil: lay letter spacing out between glyphs, as design tools do. A line starts at its
+     * first glyph, and the spacing after its last glyph is left out of its fit, its width and the
+     * longest line, and out of its alignment unless the line wraps at a space.
+     */
+    trimLetterSpacing?: boolean;
 }
 
 export interface PositionWithAffinity {

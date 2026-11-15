@@ -135,6 +135,27 @@ void ParagraphImpl::addUnresolvedCodepoints(TextRange textRange) {
     );
 }
 
+SkScalar ParagraphImpl::trailingLetterSpacing(ClusterRange clusters) const {
+    if (!fParagraphStyle.getTrimLetterSpacing()) {
+        return 0;
+    }
+    for (auto index = std::min<size_t>(clusters.end, fClusters.size()); index > clusters.start; --index) {
+        const Cluster& cluster = fClusters[index - 1];
+        // The cluster table ends in one that belongs to no run
+        const Run* run = cluster.runOrNull();
+        if (run == nullptr) {
+            continue;
+        }
+        if (run->isPlaceholder()) {
+            return 0;
+        }
+        if (!cluster.isWhitespaceBreak()) {
+            return cluster.getHalfLetterSpacing() * 2;
+        }
+    }
+    return 0;
+}
+
 void ParagraphImpl::layout(SkScalar rawWidth) {
     // TODO: This rounding is done to match Flutter tests. Must be removed...
     auto floorWidth = rawWidth;
@@ -435,8 +456,10 @@ void ParagraphImpl::applySpacingAndBuildClusterTable() {
         this->buildClusterTable();
 
         // This is something Flutter requires
+        // OpenPencil: a cursive run takes no spacing, so it has none to trim
+        bool spaced = !fParagraphStyle.getTrimLetterSpacing() || !run.isCursiveScript();
         for (auto& cluster : fClusters) {
-            cluster.setHalfLetterSpacing(style.getLetterSpacing() / 2);
+            cluster.setHalfLetterSpacing(spaced ? style.getLetterSpacing() / 2 : 0);
         }
 
         return;
@@ -593,7 +616,8 @@ void ParagraphImpl::breakShapedTextIntoLines(SkScalar maxWidth) {
     if (!fHasLineBreaks &&
         !fHasWhitespacesInside &&
         fPlaceholders.size() == 1 &&
-        fRuns.size() == 1 && fRuns[0].fAdvance.fX <= maxWidth) {
+        fRuns.size() == 1 &&
+        fRuns[0].fAdvance.fX - this->trailingLetterSpacing(ClusterRange(0, fClusters.size())) <= maxWidth) {
         // This is a short version of a line breaking when we know that:
         // 1. We have only one line of text
         // 2. It's shaped into a single run
@@ -642,6 +666,7 @@ void ParagraphImpl::breakShapedTextIntoLines(SkScalar maxWidth) {
                       metrics);
 
         fLongestLine = nearlyZero(advance.fX) ? run.advance().fX : advance.fX;
+        fLongestLine -= fLines.back().trailingLetterSpacing();
         fHeight = advance.fY;
         fWidth = maxWidth;
         fMaxIntrinsicWidth = run.advance().fX;
@@ -673,7 +698,7 @@ void ParagraphImpl::breakShapedTextIntoLines(SkScalar maxWidth) {
                 if (addEllipsis) {
                     line.createEllipsis(maxWidth, this->getEllipsis(), true);
                 }
-                fLongestLine = std::max(fLongestLine, nearlyZero(line.width()) ? widthWithSpaces : line.width());
+                fLongestLine = std::max(fLongestLine, nearlyZero(line.width()) ? widthWithSpaces : line.width() - line.trailingLetterSpacing());
             });
 
     fHeight = textWrapper.height();

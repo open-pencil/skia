@@ -79,6 +79,9 @@ public:
         return fAdvance.fX + (fEllipsis != nullptr ? fEllipsis->fAdvance.fX : 0);
     }
     SkScalar widthWithoutEllipsis() const { return fAdvance.fX; }
+    // OpenPencil: with ParagraphStyle::getTrimLetterSpacing, the letter spacing after the line's
+    // last glyph, which its width leaves out; none after an ellipsis.
+    SkScalar trailingLetterSpacing() const;
     SkVector offset() const;
 
     SkScalar alphabeticBaseline() const { return fSizes.alphabeticBaseline(); }
