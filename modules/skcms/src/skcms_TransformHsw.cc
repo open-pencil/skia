@@ -16,7 +16,7 @@
 
 #if defined(__ARM_NEON)
     #include <arm_neon.h>
-#elif defined(__SSE__)
+#elif defined(__SSE__) && !defined(__EMSCRIPTEN__)
     #include <immintrin.h>
 
     #if defined(__clang__)
