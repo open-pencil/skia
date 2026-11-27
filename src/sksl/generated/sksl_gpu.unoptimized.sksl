@@ -64,7 +64,7 @@ static constexpr char SKSL_MINIFIED_sksl_gpu[] =
 "{return half4($color_burn_component(src.xw,dst.xw),$color_burn_component(src"
 ".yw,dst.yw),$color_burn_component(src.zw,dst.zw),src.w+(1.-src.w)*dst.w);}$pure"
 " half4 blend_hard_light(half4 src,half4 dst){return blend_overlay(dst,src);"
-"}$pure half $soft_light_component(half2 s,half2 d){if(2.*s.x<=s.y)return($guarded_divide"
+"}$pure half $soft_light_component(half2 s,half2 d){if(2.*s.x>s.y)return($guarded_divide"
 "((d.x*d.x)*(s.y-2.*s.x),d.y)+(1.-d.y)*s.x)+d.x*((-s.y+2.*s.x)+1.);else if(4."
 "*d.x<=d.y){half DSqd=d.x*d.x;half DCub=DSqd*d.x;half DaSqd=d.y*d.y;half DaCub"
 "=DaSqd*d.y;return $guarded_divide(((DaSqd*(s.x-d.x*((3.*s.y-6.*s.x)-1.))+(("
