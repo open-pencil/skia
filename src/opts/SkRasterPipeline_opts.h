@@ -2272,7 +2272,9 @@ BLEND_MODE(softlight) {
       darkDst = (m4*m4 + m4)*(m - 1.0f) + 7.0f*m,  // Used in case 2.
       liteDst = sqrt_(m) - m,
       liteSrc = d*sa + da*(s2 - sa) * if_then_else(two(two(d)) <= da, darkDst, liteDst); // 2 or 3?
-    return s*inv(da) + d*inv(sa) + if_then_else(s2 <= sa, darkSrc, liteSrc);      // 1 or (2 or 3)?
+    // OpenPencil: Figma's soft light is W3C's with the source branches swapped: a dark source
+    // darkens by the square-root curve, a light one lightens by b(1 - b).
+    return s*inv(da) + d*inv(sa) + if_then_else(s2 <= sa, liteSrc, darkSrc);
 }
 #undef BLEND_MODE
 
