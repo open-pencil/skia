@@ -232,7 +232,7 @@ SI F floor_(F x) {
     return _mm512_mask_floor_ps(x, (__mmask16)-1, x);
 #elif defined(USING_AVX)
     return __builtin_ia32_roundps256(x, 0x01/*_MM_FROUND_FLOOR*/);
-#elif defined(__SSE4_1__)
+#elif defined(__SSE4_1__) && !defined(__EMSCRIPTEN__)
     return _mm_floor_ps(x);
 #elif defined(__loongarch_sx)
     return __lsx_vfrintrm_s((__m128)x);

@@ -213,6 +213,7 @@ echo "Compiling"
 ./bin/gn gen ${BUILD_DIR} \
   --args="is_debug=${IS_DEBUG} \
   is_official_build=${IS_OFFICIAL_BUILD} \
+  extra_cflags=[\"-msimd128\",\"-msse4.1\",\"-DSKRP_CPU_SSE41\"] \
   is_component_build=false \
   is_trivial_abi=true \
   is_canvaskit=true \
