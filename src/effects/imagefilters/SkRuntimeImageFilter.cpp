@@ -65,10 +65,11 @@ private:
     SK_FLATTENABLE_HOOKS(SkRuntimeImageFilter)
 
     bool onAffectsTransparentBlack() const override { return true; }
-    // Currently there is no way for a client to specify the semantics of geometric uniforms that
-    // should respond to the canvas matrix. Forcing translate-only is a hammer that lets the output
-    // be correct at the expense of resolution when there's a lot of scaling. See skbug.com/40044507.
-    MatrixCapability onGetCTMCapability() const override { return MatrixCapability::kTranslate; }
+    // OpenPencil: the shader runs once per layer pixel under any canvas matrix. onFilterImage
+    // evaluates it in parameter space, mapping its coordinates and its children's through the
+    // layer matrix, so geometric uniforms keep their meaning while the output keeps the device
+    // resolution. Upstream forces translate-only and resamples instead; see skbug.com/40044507.
+    MatrixCapability onGetCTMCapability() const override { return MatrixCapability::kComplex; }
 
     skif::FilterResult onFilterImage(const skif::Context&) const override;
 
@@ -84,9 +85,17 @@ private:
     skif::LayerSpace<SkIRect> applyMaxSampleRadius(
             const skif::Mapping& mapping,
             skif::LayerSpace<SkIRect> bounds) const {
-        skif::LayerSpace<SkISize> maxSampleRadius = mapping.paramToLayer(
-                skif::ParameterSpace<SkSize>({fMaxSampleRadius, fMaxSampleRadius})).ceil();
-        bounds.outset(maxSampleRadius);
+        // OpenPencil: the samples within the radius of a point fill a square around it in
+        // parameter space, which a layer matrix this filter now accepts can rotate or shear. The
+        // input reaches as far as that square's corners, right ± down, rather than the lengths
+        // its axes map to, which fall short of them under a rotation or shear.
+        skif::LayerSpace<skif::Vector> right = mapping.paramToLayer(
+                skif::ParameterSpace<skif::Vector>({fMaxSampleRadius, 0.f}));
+        skif::LayerSpace<skif::Vector> down = mapping.paramToLayer(
+                skif::ParameterSpace<skif::Vector>({0.f, fMaxSampleRadius}));
+        bounds.outset(skif::LayerSpace<SkISize>(
+                {SkScalarCeilToInt(SkScalarAbs(right.x()) + SkScalarAbs(down.x())),
+                 SkScalarCeilToInt(SkScalarAbs(right.y()) + SkScalarAbs(down.y()))}));
         return bounds;
     }
 

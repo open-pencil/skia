@@ -158,6 +158,12 @@ if [[ $@ == *client_bidi* ]] ; then
   ENABLE_BIDI="true"
 fi
 
+# OpenPencil: an ES module default-exporting CanvasKitInit, rather than a classic script.
+ES_MODULE="false"
+if [[ $@ == *es_module* ]]; then
+  ES_MODULE="true"
+fi
+
 ENABLE_PARAGRAPH="true"
 if [[ $@ == *no_paragraph* ]] || [[ $@ == *primitive_shaper* ]] || [[ $@ == *no_font* ]]; then
   echo "Omitting paragraph (must have fonts and non-primitive shaper)"
@@ -207,6 +213,7 @@ echo "Compiling"
 ./bin/gn gen ${BUILD_DIR} \
   --args="is_debug=${IS_DEBUG} \
   is_official_build=${IS_OFFICIAL_BUILD} \
+  extra_cflags=[\"-msimd128\",\"-msse4.1\",\"-DSKRP_CPU_SSE41\"] \
   is_component_build=false \
   is_trivial_abi=true \
   is_canvaskit=true \
@@ -251,7 +258,7 @@ echo "Compiling"
   \
   skia_enable_skshaper=true \
   skia_enable_skparagraph=true \
-  skia_enable_pdf=false \
+  skia_enable_pdf=true \
   skia_canvaskit_enable_rt_shader=true \
   skia_canvaskit_force_tracing=${FORCE_TRACING} \
   skia_canvaskit_profile_build=${PROFILE_BUILD} \
@@ -269,6 +276,7 @@ echo "Compiling"
   skia_canvaskit_enable_paragraph=${ENABLE_PARAGRAPH} \
   skia_canvaskit_enable_bidi=${ENABLE_BIDI} \
   skia_canvaskit_enable_webgl=${ENABLE_WEBGL} \
-  skia_canvaskit_enable_webgpu=${ENABLE_WEBGPU}"
+  skia_canvaskit_enable_webgpu=${ENABLE_WEBGPU} \
+  skia_canvaskit_es_module=${ES_MODULE}"
 
 ${NINJA} -C ${BUILD_DIR} canvaskit.js -k 10

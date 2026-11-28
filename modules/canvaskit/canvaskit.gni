@@ -22,6 +22,9 @@ declare_args() {
   skia_canvaskit_legacy_draw_vertices_blend_mode = false
   skia_canvaskit_enable_webgpu = false
   skia_canvaskit_enable_webgl = false
+
+  # OpenPencil: build canvaskit.js as an ES module (compile.sh es_module).
+  skia_canvaskit_es_module = false
 }
 
 # Assert that skia_canvaskit_profile_build implies release mode.

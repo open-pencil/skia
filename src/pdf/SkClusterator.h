@@ -8,6 +8,7 @@
 #define SkClusterator_DEFINED
 
 #include <cstdint>
+#include <vector>
 
 namespace sktext {
 class GlyphRun;
@@ -42,5 +43,8 @@ private:
     uint32_t const fTextByteLength;
     bool const fReversedChars;
     uint32_t fCurrentGlyphIndex = 0;
+    // OpenPencil: the run's distinct cluster starts in order, so next() finds where a cluster's
+    // text ends by a binary search rather than a scan of every glyph.
+    std::vector<uint32_t> fClusterStarts;
 };
 #endif  // SkClusterator_DEFINED

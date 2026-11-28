@@ -79,6 +79,9 @@ public:
         return fAdvance.fX + (fEllipsis != nullptr ? fEllipsis->fAdvance.fX : 0);
     }
     SkScalar widthWithoutEllipsis() const { return fAdvance.fX; }
+    // OpenPencil: with ParagraphStyle::getTrimLetterSpacing, the letter spacing after the line's
+    // last glyph, which its width leaves out; none after an ellipsis.
+    SkScalar trailingLetterSpacing() const;
     SkVector offset() const;
 
     SkScalar alphabeticBaseline() const { return fSizes.alphabeticBaseline(); }
@@ -144,7 +147,8 @@ public:
 
 private:
     std::unique_ptr<Run> shapeEllipsis(const SkString& ellipsis, const Cluster* cluster);
-    void justify(SkScalar maxWidth);
+    // Returns false when the line has no spaces between words to stretch.
+    bool justify(SkScalar maxWidth);
 
     void buildTextBlob(TextRange textRange, const TextStyle& style, const ClipContext& context);
     void paintBackground(ParagraphPainter* painter,

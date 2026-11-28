@@ -85,7 +85,8 @@ struct ParagraphStyle {
                this->fTextDirection == rhs.fTextDirection && this->fTextAlign == rhs.fTextAlign &&
                this->fDefaultTextStyle == rhs.fDefaultTextStyle &&
                this->fReplaceTabCharacters == rhs.fReplaceTabCharacters &&
-               this->fFakeMissingFontStyles == rhs.fFakeMissingFontStyles;
+               this->fFakeMissingFontStyles == rhs.fFakeMissingFontStyles &&
+               this->fTrimLetterSpacing == rhs.fTrimLetterSpacing;
 
     }
 
@@ -135,6 +136,13 @@ struct ParagraphStyle {
     bool getLetterSpacingByCSSSpec() const { return fLetterSpacingByCSSSpec; }
     void setLetterSpacingByCSSSpec(bool value) { fLetterSpacingByCSSSpec = value; }
 
+    // OpenPencil: letter spacing as design tools lay it out, between glyphs rather than around
+    // them. A line starts at its first glyph, without half a spacing before it, and the spacing
+    // after its last glyph is left out of its fit, its width and the longest line, and out of its
+    // alignment unless it wraps at a space.
+    bool getTrimLetterSpacing() const { return fTrimLetterSpacing; }
+    void setTrimLetterSpacing(bool value) { fTrimLetterSpacing = value; }
+
 private:
     StrutStyle fStrutStyle;
     TextStyle fDefaultTextStyle;
@@ -150,6 +158,7 @@ private:
     bool fFakeMissingFontStyles;
     bool fApplyRoundingHack = true;
     bool fLetterSpacingByCSSSpec = false;
+    bool fTrimLetterSpacing = false;
 };
 }  // namespace textlayout
 }  // namespace skia
